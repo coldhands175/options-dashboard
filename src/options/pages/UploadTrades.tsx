@@ -1,6 +1,7 @@
 import * as React from 'react';
 import { Box, Typography, Button, Paper, TextField, Divider, CircularProgress } from '@mui/material';
 import CloudUploadIcon from '@mui/icons-material/CloudUpload';
+import { xanoApi, XanoApiError } from '../../services/xanoApi';
 
 export default function UploadTrades() {
   const [naturalLanguageInput, setNaturalLanguageInput] = React.useState('');
@@ -31,30 +32,19 @@ export default function UploadTrades() {
       formData.append("content", file); // Append each file with the key 'content'
     });
 
-    console.log("Auth Token being sent:", import.meta.env.VITE_XANO_AUTH_TOKEN);
 
     try {
-      const response = await fetch("https://xtwz-brgd-1r1u.n7c.xano.io/api:8GoBSeHO/transaction_documents", {
-        method: "POST",
-        body: formData,
-        headers: {
-          'Authorization': `Bearer ${import.meta.env.VITE_XANO_AUTH_TOKEN}`,
-        },
-      });
-
-      if (response.ok) {
-        const result = await response.json();
-        console.log("PDF Upload successful:", result);
-        setPdfUploadSuccess(true);
-        setSelectedFiles([]); // Clear the selected files after successful upload
-      } else {
-        const errorData = await response.json();
-        console.error("PDF Upload failed:", errorData);
-        setPdfUploadError(errorData.message || "Failed to upload PDF.");
-      }
+      const result = await xanoApi.uploadTransactionDocuments(formData);
+      console.log("PDF Upload successful:", result);
+      setPdfUploadSuccess(true);
+      setSelectedFiles([]); // Clear the selected files after successful upload
     } catch (error) {
       console.error("Error during PDF upload:", error);
-      setPdfUploadError("An error occurred during upload.");
+      if (error instanceof XanoApiError && error.code === 'RATE_LIMITED') {
+        setPdfUploadError('Too many requests. Please wait a moment before uploading again.');
+      } else {
+        setPdfUploadError((error as Error).message || "An error occurred during upload.");
+      }
     } finally {
       setIsPdfUploading(false);
     }

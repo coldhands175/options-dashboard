@@ -13,6 +13,7 @@ import Paper from "@mui/material/Paper";
 import Chip from "@mui/material/Chip";
 import { Trade, Position } from "../models/types";
 import { PositionManager } from "../models/positionManager";
+import { xanoApi, XanoApiError } from "../../services/xanoApi";
 
 export default function Positions() {
   const tradesRef = React.useRef<Trade[] | null>(null);
@@ -30,21 +31,7 @@ export default function Positions() {
 
     const fetchPositions = async () => {
       try {
-        console.log("Xano Auth Token (Positions.tsx):", import.meta.env.VITE_XANO_AUTH_TOKEN);
-        const response = await fetch(
-          "https://xtwz-brgd-1r1u.n7c.xano.io/api:8GoBSeHO/transactions",
-          {
-            headers: {
-              Authorization: `Bearer ${import.meta.env.VITE_XANO_AUTH_TOKEN}`,
-            },
-          }
-        );
-
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
-        }
-
-        const data = await response.json();
+        const data = await xanoApi.getTransactions();
         tradesRef.current = data as Trade[];
         const fetchedTrades: Trade[] = tradesRef.current.map((item: any) => {
           const mappedItem: Trade = {

@@ -21,6 +21,7 @@ import ArrowDownwardIcon from "@mui/icons-material/ArrowDownward";
 import ArrowUpwardIcon from "@mui/icons-material/ArrowUpward";
 import TableSortLabel from "@mui/material/TableSortLabel"; // Import TableSortLabel
 import { Trade } from "../models/types"; // Ensure Trade interface is correctly imported
+import { xanoApi, XanoApiError } from "../../services/xanoApi";
 
 export default function Trades() {
   const tradesRef = React.useRef<Trade[] | null>(null);
@@ -37,26 +38,16 @@ export default function Trades() {
 
     const fetchTrades = async () => {
       try {
-        console.log("Xano Auth Token (Trades.tsx):", import.meta.env.VITE_XANO_AUTH_TOKEN);
-        const response = await fetch(
-          "https://xtwz-brgd-1r1u.n7c.xano.io/api:8GoBSeHO/transactions",
-          {
-            headers: {
-              Authorization: `Bearer ${import.meta.env.VITE_XANO_AUTH_TOKEN}`,
-            },
-          }
-        );
-
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
-        }
-
-        const data = await response.json();
+        const data = await xanoApi.getTransactions();
         // Ensure the fetched data aligns with the Trade interface
         tradesRef.current = data as Trade[];
-        setTrades(tradesRef.current); // Cast directly to Trade[] now that interface is updated
+        setTrades(tradesRef.current);
       } catch (err) {
-        setError((err as Error).message);
+        if (err instanceof XanoApiError && err.code === 'RATE_LIMITED') {
+          setError('Too many requests. Please wait a moment and refresh the page.');
+        } else {
+          setError((err as Error).message);
+        }
       } finally {
         setLoading(false);
       }
