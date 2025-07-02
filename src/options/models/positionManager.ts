@@ -363,30 +363,29 @@ export class PositionManager {
     closeDate = undefined;
 
     trades.forEach(trade => {
-
-
       // Calculate quantity - For options trading:
-      // Sell to Open = Short position (negative quantity)
-      // Buy to Open = Long position (positive quantity)
-      // Buy to Close = Close short position (reduce negative quantity)
-      // Sell to Close = Close long position (reduce positive quantity)
+      // STO (Sell to Open) = Create short position = NEGATIVE quantity
+      // BTO (Buy to Open) = Create long position = POSITIVE quantity  
+      // BTC (Buy to Close) = Close short position = POSITIVE quantity (reduces negative)
+      // STC (Sell to Close) = Close long position = NEGATIVE quantity (reduces positive)
       
-      if (trade.tradeType === 'Sell') {
-        if (trade.status === 'Open') {
-          // Sell to Open - creates short position (negative quantity)
-          currentQuantity -= trade.Quantity;
-        } else { // Close
-          // Sell to Close - closes long position (reduces positive quantity)
-          currentQuantity -= trade.Quantity;
-        }
-      } else if (trade.tradeType === 'Buy') {
-        if (trade.status === 'Open') {
-          // Buy to Open - creates long position (positive quantity)
-          currentQuantity += trade.Quantity;
-        } else { // Close
-          // Buy to Close - closes short position (reduces negative quantity)
-          currentQuantity += trade.Quantity;
-        }
+      const tradeAction = `${trade.tradeType}/${trade.status}`.toLowerCase();
+      
+      switch (tradeAction) {
+        case 'sell/open': // STO - Sell to Open
+          currentQuantity -= trade.Quantity; // Creates short position (negative)
+          break;
+        case 'buy/open': // BTO - Buy to Open
+          currentQuantity += trade.Quantity; // Creates long position (positive)
+          break;
+        case 'buy/close': // BTC - Buy to Close
+          currentQuantity += trade.Quantity; // Closes short position (reduces negative)
+          break;
+        case 'sell/close': // STC - Sell to Close
+          currentQuantity -= trade.Quantity; // Closes long position (reduces positive)
+          break;
+        default:
+          console.warn(`Unknown trade action: ${tradeAction}`);
       }
 
       // Calculate profit/loss
@@ -412,30 +411,32 @@ export class PositionManager {
         console.log(`    [${index}] ID: ${trade.id}, Date: ${trade.Transaction_Date}, Type: ${trade.tradeType}, Status: ${trade.status}, Qty: ${trade.Quantity}`);
       });
       
-      // Show quantity calculation step by step (using NEW logic)
+      // Show quantity calculation step by step (using SWITCH LOGIC)
       let qty = 0;
-      console.log('  - Quantity Calculation Steps (NEW LOGIC):');
+      console.log('  - Quantity Calculation Steps (SWITCH LOGIC):');
       trades.forEach((trade, index) => {
         const before = qty;
-        if (trade.tradeType === 'Sell') {
-          if (trade.status === 'Open') {
-            // Sell to Open - creates short position (negative quantity)
-            qty -= trade.Quantity;
-          } else { // Close
-            // Sell to Close - closes long position (reduces positive quantity)
-            qty -= trade.Quantity;
-          }
-        } else if (trade.tradeType === 'Buy') {
-          if (trade.status === 'Open') {
-            // Buy to Open - creates long position (positive quantity)
-            qty += trade.Quantity;
-          } else { // Close
-            // Buy to Close - closes short position (reduces negative quantity)
-            qty += trade.Quantity;
-          }
+        const tradeAction = `${trade.tradeType}/${trade.status}`.toLowerCase();
+        
+        switch (tradeAction) {
+          case 'sell/open': // STO - Sell to Open
+            qty -= trade.Quantity; // Creates short position (negative)
+            break;
+          case 'buy/open': // BTO - Buy to Open
+            qty += trade.Quantity; // Creates long position (positive)
+            break;
+          case 'buy/close': // BTC - Buy to Close
+            qty += trade.Quantity; // Closes short position (reduces negative)
+            break;
+          case 'sell/close': // STC - Sell to Close
+            qty -= trade.Quantity; // Closes long position (reduces positive)
+            break;
+          default:
+            console.warn(`Unknown trade action: ${tradeAction}`);
         }
-        const action = trade.tradeType === 'Sell' ? '-' : '+';
-        console.log(`    [${index}] ${trade.tradeType}/${trade.status}: ${before} → ${qty} (${action}${trade.Quantity})`);
+        
+        const operation = tradeAction.includes('sell') ? '-' : '+';
+        console.log(`    [${index}] ${trade.tradeType}/${trade.status} (${tradeAction}): ${before} → ${qty} (${operation}${trade.Quantity})`);
       });
     }
 
