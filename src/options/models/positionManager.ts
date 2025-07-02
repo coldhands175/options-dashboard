@@ -365,17 +365,26 @@ export class PositionManager {
     trades.forEach(trade => {
 
 
-      // Calculate quantity
-      if (trade.tradeType === 'Buy') {
+      // Calculate quantity - For options trading:
+      // Sell to Open = Short position (negative quantity)
+      // Buy to Open = Long position (positive quantity)
+      // Buy to Close = Close short position (reduce negative quantity)
+      // Sell to Close = Close long position (reduce positive quantity)
+      
+      if (trade.tradeType === 'Sell') {
         if (trade.status === 'Open') {
-          currentQuantity += trade.Quantity;
+          // Sell to Open - creates short position (negative quantity)
+          currentQuantity -= trade.Quantity;
         } else { // Close
+          // Sell to Close - closes long position (reduces positive quantity)
           currentQuantity -= trade.Quantity;
         }
-      } else if (trade.tradeType === 'Sell') {
+      } else if (trade.tradeType === 'Buy') {
         if (trade.status === 'Open') {
-          currentQuantity -= trade.Quantity;
+          // Buy to Open - creates long position (positive quantity)
+          currentQuantity += trade.Quantity;
         } else { // Close
+          // Buy to Close - closes short position (reduces negative quantity)
           currentQuantity += trade.Quantity;
         }
       }
@@ -403,25 +412,30 @@ export class PositionManager {
         console.log(`    [${index}] ID: ${trade.id}, Date: ${trade.Transaction_Date}, Type: ${trade.tradeType}, Status: ${trade.status}, Qty: ${trade.Quantity}`);
       });
       
-      // Show quantity calculation step by step
+      // Show quantity calculation step by step (using NEW logic)
       let qty = 0;
-      console.log('  - Quantity Calculation Steps:');
+      console.log('  - Quantity Calculation Steps (NEW LOGIC):');
       trades.forEach((trade, index) => {
         const before = qty;
-        if (trade.tradeType === 'Buy') {
+        if (trade.tradeType === 'Sell') {
           if (trade.status === 'Open') {
-            qty += trade.Quantity;
-          } else {
+            // Sell to Open - creates short position (negative quantity)
+            qty -= trade.Quantity;
+          } else { // Close
+            // Sell to Close - closes long position (reduces positive quantity)
             qty -= trade.Quantity;
           }
-        } else if (trade.tradeType === 'Sell') {
+        } else if (trade.tradeType === 'Buy') {
           if (trade.status === 'Open') {
-            qty -= trade.Quantity;
-          } else {
+            // Buy to Open - creates long position (positive quantity)
+            qty += trade.Quantity;
+          } else { // Close
+            // Buy to Close - closes short position (reduces negative quantity)
             qty += trade.Quantity;
           }
         }
-        console.log(`    [${index}] ${trade.tradeType}/${trade.status}: ${before} → ${qty} (${trade.tradeType === 'Buy' ? '+' : '-'}${trade.Quantity})`);
+        const action = trade.tradeType === 'Sell' ? '-' : '+';
+        console.log(`    [${index}] ${trade.tradeType}/${trade.status}: ${before} → ${qty} (${action}${trade.Quantity})`);
       });
     }
 
