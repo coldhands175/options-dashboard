@@ -390,16 +390,28 @@ export class PositionManager {
     const today = new Date();
     today.setHours(0, 0, 0, 0); // Set to start of day for comparison
 
-    // Debug logging for expiration logic
-    const debugInfo = {
-      ticker: firstTrade.Symbol,
-      expiration: expiration,
-      expirationDate: expirationDate,
-      today: today,
-      currentQuantity: currentQuantity,
-      hasClosingTrades: trades.some(t => t.status === 'Closed')
-    };
-    console.log('Position expiration debug:', debugInfo);
+    // Debug logging for expiration logic - show first position only to avoid spam
+    if (firstTrade.Symbol === 'LNG') {
+      const debugInfo = {
+        ticker: firstTrade.Symbol,
+        expiration: expiration,
+        expirationDate: expirationDate,
+        expirationDateString: expirationDate?.toISOString(),
+        today: today,
+        todayString: today.toISOString(),
+        currentQuantity: currentQuantity,
+        hasClosingTrades: trades.some(t => t.status === 'Closed'),
+        tradesInPosition: trades.map(t => ({
+          id: t.id,
+          date: t.Transaction_Date,
+          type: t.tradeType,
+          status: t.status,
+          quantity: t.Quantity,
+          symbol: t.Symbol
+        }))
+      };
+      console.log('🔍 DETAILED Position debug for LNG:', debugInfo);
+    }
 
     // Determine position status based on quantity and expiration
     if (currentQuantity === 0) {
