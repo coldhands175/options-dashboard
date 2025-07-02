@@ -385,23 +385,40 @@ export class PositionManager {
       profitLoss += (trade.PremiumValue * premiumEffect * 100) - trade.Book_Cost;
     });
 
-    const expirationDate = new Date(expiration);
+    // Parse expiration date more carefully and handle different formats
+    const expirationDate = this.parseExpirationDate(expiration);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0); // Set to start of day for comparison
 
+    // Debug logging for expiration logic
+    const debugInfo = {
+      ticker: firstTrade.Symbol,
+      expiration: expiration,
+      expirationDate: expirationDate,
+      today: today,
+      currentQuantity: currentQuantity,
+      hasClosingTrades: trades.some(t => t.status === 'Closed')
+    };
+    console.log('Position expiration debug:', debugInfo);
 
-    const today = new Date(); // Get current date for comparison
-
+    // Determine position status based on quantity and expiration
     if (currentQuantity === 0) {
       // Position was explicitly closed by trades
       status = 'Closed';
       closeDate = trades[trades.length - 1].Transaction_Date;
-    } else if (expirationDate < today) {
+      console.log(`Position ${firstTrade.Symbol} marked as Closed - quantity is 0`);
+    } else if (expirationDate && expirationDate < today) {
       // Position has contracts remaining, but expiration date has passed
       status = 'Expired';
       closeDate = expiration; // Use expiration date as close date for expired positions
+      console.log(`Position ${firstTrade.Symbol} marked as Expired - past expiration date`);
+      // For expired positions, consider them as having zero P/L from expiration
+      // (premium collected is kept, but no additional profit/loss from assignment)
     } else {
       // Position is still open
       status = 'Open';
       closeDate = undefined;
+      console.log(`Position ${firstTrade.Symbol} marked as Open`);
     }
 
     // Create position object
@@ -440,5 +457,45 @@ export class PositionManager {
    */
   private generateUniqueId(): string {
     return Math.random().toString(36).substring(2, 10);
+  }
+
+  /**
+   * Parse expiration date from various formats
+   */
+  private parseExpirationDate(dateString: string): Date | null {
+    if (!dateString) return null;
+    
+    try {
+      // Try parsing as-is first
+      let date = new Date(dateString);
+      
+      // If invalid, try common formats
+      if (isNaN(date.getTime())) {
+        // Try YYYY-MM-DD format
+        if (/^\d{4}-\d{2}-\d{2}$/.test(dateString)) {
+          date = new Date(dateString + 'T00:00:00');
+        }
+        // Try MM/DD/YYYY format
+        else if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(dateString)) {
+          const parts = dateString.split('/');
+          date = new Date(parseInt(parts[2]), parseInt(parts[0]) - 1, parseInt(parts[1]));
+        }
+        // Try DD-MM-YYYY format
+        else if (/^\d{1,2}-\d{1,2}-\d{4}$/.test(dateString)) {
+          const parts = dateString.split('-');
+          date = new Date(parseInt(parts[2]), parseInt(parts[1]) - 1, parseInt(parts[0]));
+        }
+      }
+      
+      // Set to end of day for expiration comparison
+      if (!isNaN(date.getTime())) {
+        date.setHours(23, 59, 59, 999);
+        return date;
+      }
+    } catch (error) {
+      console.warn('Failed to parse expiration date:', dateString, error);
+    }
+    
+    return null;
   }
 }

@@ -124,7 +124,17 @@ export default function Positions() {
                       <Chip
                         label={position.status}
                         size="small"
-                        color={position.status === "Open" ? "primary" : "default"}
+                        color={
+                          position.status === "Open" 
+                            ? "primary" 
+                            : position.status === "Expired" 
+                            ? "warning" 
+                            : "default"
+                        }
+                        sx={{
+                          backgroundColor: position.status === "Expired" ? "warning.light" : undefined,
+                          color: position.status === "Expired" ? "warning.contrastText" : undefined,
+                        }}
                       />
                     </TableCell>
                   </TableRow>
