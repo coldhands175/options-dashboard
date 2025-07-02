@@ -40,9 +40,16 @@ class RateLimitedCache {
 
 const cache = new RateLimitedCache();
 
-interface XanoApiError extends Error {
+export class XanoApiError extends Error {
   status?: number;
   code?: string;
+  
+  constructor(message: string, status?: number, code?: string) {
+    super(message);
+    this.name = 'XanoApiError';
+    this.status = status;
+    this.code = code;
+  }
 }
 
 /**
@@ -78,18 +85,18 @@ async function xanoRequest(
     });
 
     if (!response.ok) {
-      const error: XanoApiError = new Error(`Xano API Error: ${response.status} ${response.statusText}`);
-      error.status = response.status;
+      let message = `Xano API Error: ${response.status} ${response.statusText}`;
+      let code: string | undefined;
       
       if (response.status === 429) {
-        error.code = 'RATE_LIMITED';
-        error.message = 'Too many requests. Please wait before trying again.';
+        code = 'RATE_LIMITED';
+        message = 'Too many requests. Please wait before trying again.';
       } else if (response.status === 401) {
-        error.code = 'UNAUTHORIZED';
-        error.message = 'Invalid authentication token.';
+        code = 'UNAUTHORIZED';
+        message = 'Invalid authentication token.';
       }
       
-      throw error;
+      throw new XanoApiError(message, response.status, code);
     }
 
     const data = await response.json();
@@ -144,5 +151,3 @@ export const xanoApi = {
     });
   }
 };
-
-export { XanoApiError };
