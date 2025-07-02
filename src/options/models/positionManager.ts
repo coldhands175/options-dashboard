@@ -439,24 +439,27 @@ export class PositionManager {
       });
     }
 
+    // Store raw quantity for status determination
+    const rawQuantity = currentQuantity;
+    
     // Determine position status based on quantity and expiration
-    if (currentQuantity === 0) {
+    if (rawQuantity === 0) {
       // Position was explicitly closed by trades
       status = 'Closed';
       closeDate = trades[trades.length - 1].Transaction_Date;
-      console.log(`Position ${firstTrade.Symbol} marked as Closed - quantity is 0`);
+      console.log(`Position ${firstTrade.Symbol} marked as Closed - raw quantity is 0`);
     } else if (expirationDate && expirationDate < today) {
       // Position has contracts remaining, but expiration date has passed
       status = 'Expired';
       closeDate = expiration; // Use expiration date as close date for expired positions
-      console.log(`Position ${firstTrade.Symbol} marked as Expired - past expiration date`);
+      console.log(`Position ${firstTrade.Symbol} marked as Expired - raw quantity: ${rawQuantity}, past expiration date`);
       // For expired positions, consider them as having zero P/L from expiration
       // (premium collected is kept, but no additional profit/loss from assignment)
     } else {
       // Position is still open
       status = 'Open';
       closeDate = undefined;
-      console.log(`Position ${firstTrade.Symbol} marked as Open`);
+      console.log(`Position ${firstTrade.Symbol} marked as Open - raw quantity: ${rawQuantity}`);
     }
 
     // Create position object
@@ -470,7 +473,7 @@ export class PositionManager {
       openDate,
       closeDate,
       trades: trades.map(t => t.id),
-      currentQuantity: Math.abs(currentQuantity), // Store as absolute value
+      currentQuantity: Math.abs(currentQuantity), // Store as absolute value for display
       profitLoss
     };
 
