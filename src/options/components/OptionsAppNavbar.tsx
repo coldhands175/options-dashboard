@@ -13,7 +13,8 @@ import NotificationsIcon from "@mui/icons-material/Notifications";
 import MoreIcon from "@mui/icons-material/MoreVert";
 import SearchIcon from "@mui/icons-material/Search";
 import InputBase from "@mui/material/InputBase";
-import { alpha, styled } from "@mui/material/styles";
+import { alpha, styled, useTheme } from "@mui/material/styles";
+import TradingViewWidget from "../../components/TradingViewWidget";
 
 const Search = styled("div")(({ theme }) => ({
   position: "relative",
@@ -56,6 +57,9 @@ const StyledInputBase = styled(InputBase)(({ theme }) => ({
 }));
 
 export default function OptionsAppNavbar() {
+  const theme = useTheme();
+  
+  
   const [anchorEl, setAnchorEl] = React.useState<null | HTMLElement>(null);
   const [mobileMoreAnchorEl, setMobileMoreAnchorEl] =
     React.useState<null | HTMLElement>(null);
@@ -232,6 +236,48 @@ export default function OptionsAppNavbar() {
             </IconButton>
           </Box>
         </Toolbar>
+        {/* TradingView Ticker Tape */}
+        <Box
+          sx={{
+            height: '60px',
+            width: '100%',
+            borderTop: (theme) => `1px solid ${
+              theme.palette.mode === 'dark'
+                ? theme.palette.grey[800]
+                : theme.palette.grey[200]
+            }`,
+            backgroundColor: (theme) =>
+              theme.palette.mode === 'dark' 
+                ? theme.palette.background.paper
+                : alpha(theme.palette.background.paper, 0.8),
+            // Force background for dark mode
+            ...(theme.palette.mode === 'dark' && {
+              background: `${theme.palette.background.paper} !important`,
+              '& *': {
+                backgroundColor: `${theme.palette.background.paper} !important`
+              }
+            }),
+            // Aggressively override TradingView widget backgrounds
+            '& .tradingview-widget-container': {
+              backgroundColor: 'transparent !important',
+            },
+            '& .tradingview-widget-container__widget': {
+              backgroundColor: 'transparent !important',
+            },
+            '& iframe': {
+              backgroundColor: 'transparent !important',
+            },
+            // Target the widget's internal styling
+            '& [data-widget-host="tradingview"]': {
+              backgroundColor: 'transparent !important',
+            }
+          }}
+        >
+          <TradingViewWidget 
+            displayMode="adaptive"
+            isTransparent={true}
+          />
+        </Box>
       </AppBar>
       {renderMobileMenu}
       {renderMenu}

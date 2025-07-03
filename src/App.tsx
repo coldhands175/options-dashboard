@@ -5,6 +5,7 @@ import Typography from "@mui/material/Typography";
 import Box from "@mui/material/Box";
 import CrmDashboard from "./crm/CrmDashboard";
 import OptionsDashboard from "./options/OptionsDashboard";
+import './tradingview-overrides.css';
 
 
 function NotFound() {

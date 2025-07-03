@@ -6,6 +6,60 @@ import { Trade, Position, PerformanceMetrics } from './types';
 export class PositionManager {
   private trades: Trade[] = [];
   private positions: Position[] = [];
+  private _nextId: number = 1;
+  private _tradeIdCounter: number = 1;
+
+  private generateTradeId(): number {
+    return this._tradeIdCounter++;
+  }
+
+  private generateUniqueId(): number {
+    return this._nextId++;
+  }
+
+  private createPositionKey(
+    symbol: string,
+    strikePrice: number,
+    strikeDate: string,
+    contractType: string
+  ): string {
+    return `${symbol}-${strikePrice}-${strikeDate}-${contractType}`;
+  }
+
+  private parseExpirationDate(dateString: string): Date | null {
+    if (!dateString) return null;
+
+    try {
+      let date: Date;
+      if (/^\d{4}-\d{2}-\d{2}$/.test(dateString)) {
+        const parts = dateString.split('-').map(Number);
+        // YYYY-MM-DD -> new Date(year, monthIndex, day)
+        date = new Date(parts[0], parts[1] - 1, parts[2]);
+      } else if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(dateString)) {
+        const parts = dateString.split('/').map(Number);
+        // MM/DD/YYYY -> new Date(year, monthIndex, day)
+        date = new Date(parts[2], parts[0] - 1, parts[1]);
+      } else if (/^\d{1,2}-\d{1,2}-\d{4}$/.test(dateString)) {
+        const parts = dateString.split('-').map(Number);
+        // MM-DD-YYYY -> new Date(year, monthIndex, day)
+        date = new Date(parts[2], parts[0] - 1, parts[1]);
+      } else {
+        // Fallback for other formats, might still have issues
+        date = new Date(dateString);
+      }
+
+      // Ensure it's a valid date and set to local midnight
+      if (isNaN(date.getTime())) {
+        return null;
+      }
+      date.setHours(0, 0, 0, 0); // Ensure local midnight
+      return date;
+    } catch (e) {
+      console.error(`Error parsing date string: ${dateString}`, e);
+      return null;
+    }
+  }
+
 
   /**
    * Initialize with optional initial trades
@@ -132,13 +186,13 @@ export class PositionManager {
       };
     }
     
-    const winners = closedPositions.filter(p => (p.profitLoss || 0) > 0);
-    const losers = closedPositions.filter(p => (p.profitLoss || 0) <= 0);
+    const winners = closedPositions.filter(p => (p.totalSalesBookCost - p.totalPurchasesBookCost) > 0);
+    const losers = closedPositions.filter(p => (p.totalSalesBookCost - p.totalPurchasesBookCost) <= 0);
     
     const winRate = winners.length / closedPositions.length;
     
-    const totalProfit = winners.reduce((sum, p) => sum + (p.profitLoss || 0), 0);
-    const totalLoss = Math.abs(losers.reduce((sum, p) => sum + (p.profitLoss || 0), 0));
+    const totalProfit = winners.reduce((sum, p) => sum + (p.totalSalesBookCost - p.totalPurchasesBookCost), 0);
+    const totalLoss = Math.abs(losers.reduce((sum, p) => sum + (p.totalSalesBookCost - p.totalPurchasesBookCost), 0));
     
     const averageProfit = winners.length > 0 ? totalProfit / winners.length : 0;
     const averageLoss = losers.length > 0 ? totalLoss / losers.length : 0;
@@ -277,267 +331,93 @@ export class PositionManager {
    * Main method to synchronize positions based on all trades
    */
   private syncPositions(): void {
-    // Clear existing positions but remember their IDs
-    const existingPositionIds = new Map<string, string>();
-    this.positions.forEach(position => {
-      // Create a unique key for each position based on ticker+strike+expiration+type
-      const positionKey = this.createPositionKey(
-        position.ticker, 
-        position.strike, 
-        position.expiration,
-        position.type
-      );
-      existingPositionIds.set(positionKey, position.id);
-    });
-    
-    // Reset positions array
+    // Clear existing positions to re-sync
     this.positions = [];
-    
-    // Group trades by their position attributes (ticker, strike, expiration, type)
-    const positionGroups = new Map<string, Trade[]>();
-    
-    // Sort trades by date for proper processing
-    const sortedTrades = [...this.trades].sort(
-      (a, b) => new Date(a.Transaction_Date).getTime() - new Date(b.Transaction_Date).getTime()
-    );
-    
-    // Group trades
-    sortedTrades.forEach(trade => {
+
+    // Sort trades by transaction date to process them chronologically
+    this.trades.sort((a, b) => new Date(a.Transaction_Date).getTime() - new Date(b.Transaction_Date).getTime());
+
+    // Map to hold currently open positions, keyed by a unique identifier (ticker-strike-expiration-type)
+    const openPositions = new Map<string, Position>();
+
+    this.trades.forEach(trade => {
       const positionKey = this.createPositionKey(
-        trade.Symbol, 
-        trade.StrikePrice, 
+        trade.Symbol,
+        trade.StrikePrice,
         trade.StrikeDate,
-        trade.contractType // Using contractType for position grouping for now
+        trade.contractType
       );
+
+      let currentPosition = openPositions.get(positionKey);
+
+      // The trade data is already normalized to lowercase in the Positions component
+      // So we can directly use the status values
+      const tradeAction = `${trade.tradeType}/${trade.status}`;
+
+      // Since all trades are individual actions marked as 'open',
+      // we need to determine position status based on net quantity later
+      // For now, treat all trades as contributing to the position
       
-      if (!positionGroups.has(positionKey)) {
-        positionGroups.set(positionKey, []);
-      }
-      
-      positionGroups.get(positionKey)!.push(trade);
-    });
-    
-    // Process each group to create or update positions
-    positionGroups.forEach((groupTrades, positionKey) => {
-      // Use existing position ID if available, or generate a new one
-      const positionId = existingPositionIds.has(positionKey) 
-        ? existingPositionIds.get(positionKey)! 
-        : `pos-${this.generateUniqueId()}`;
-      
-      // Update positionId on all trades in this group
-      groupTrades.forEach(trade => {
-        trade.positionId = positionId;
-      });
-      
-      // Create position from grouped trades
-      const position = this.createPositionFromTrades(groupTrades, positionId);
-      if (position) {
-        this.positions.push(position);
-      }
-    });
-  }
+      if (true) { // Process all trades
+        if (!currentPosition) {
+          // Create a new position if one doesn't exist for this key
+          currentPosition = {
+            id: `pos-${this.generateUniqueId()}`,
+            ticker: trade.Symbol,
+            strike: trade.StrikePrice,
+            expiration: trade.StrikeDate,
+            type: trade.contractType,
+            status: 'Open',
+            openDate: trade.Transaction_Date,
+            trades: [],
+            currentQuantity: 0,
+            totalSalesBookCost: 0,
+            totalPurchasesBookCost: 0,
+          };
+          openPositions.set(positionKey, currentPosition);
+        }
 
-  /**
-   * Create a unique key to identify positions
-   */
-  private createPositionKey(ticker: string, strike: number, expiration: string, type: string): string {
-    return `${ticker}-${strike}-${expiration}-${type}`;
-  }
-
-  /**
-   * Create a position from a group of trades
-   */
-  private createPositionFromTrades(trades: Trade[], positionId: string): Position | null {
-    if (trades.length === 0) return null;
-
-    const firstTrade = trades[0];
-    const expiration = firstTrade.StrikeDate;
-
-
-    let currentQuantity = 0;
-    let openDate = firstTrade.Transaction_Date;
-    let closeDate: string | undefined;
-    let profitLoss = 0;
-    let status: 'Open' | 'Closed' | 'Expired' = 'Open';
-    openDate = firstTrade.Transaction_Date;
-    closeDate = undefined;
-
-    trades.forEach(trade => {
-      // Calculate quantity - For options trading:
-      // STO (Sell to Open) = Create short position = NEGATIVE quantity
-      // BTO (Buy to Open) = Create long position = POSITIVE quantity  
-      // BTC (Buy to Close) = Close short position = POSITIVE quantity (reduces negative)
-      // STC (Sell to Close) = Close long position = NEGATIVE quantity (reduces positive)
-      
-      const tradeAction = `${trade.tradeType}/${trade.status}`.toLowerCase();
-      
-      switch (tradeAction) {
-        case 'sell/open': // STO - Sell to Open
-          currentQuantity -= trade.Quantity; // Creates short position (negative)
-          break;
-        case 'buy/open': // BTO - Buy to Open
-          currentQuantity += trade.Quantity; // Creates long position (positive)
-          break;
-        case 'buy/close': // BTC - Buy to Close
-          currentQuantity += trade.Quantity; // Closes short position (reduces negative)
-          break;
-        case 'sell/close': // STC - Sell to Close
-          currentQuantity -= trade.Quantity; // Closes long position (reduces positive)
-          break;
-        default:
-          console.warn(`Unknown trade action: ${tradeAction}`);
-      }
-
-      // Calculate profit/loss
-      const premiumEffect = trade.tradeType === 'Sell' ? 1 : -1; // Sell is credit (+), Buy is debit (-)
-      profitLoss += (trade.PremiumValue * premiumEffect * 100) - trade.Book_Cost;
-    });
-
-    // Parse expiration date more carefully and handle different formats
-    const expirationDate = this.parseExpirationDate(expiration);
-    const today = new Date();
-    today.setHours(0, 0, 0, 0); // Set to start of day for comparison
-
-    // Debug logging for expiration logic - show first position only to avoid spam
-    if (firstTrade.Symbol === 'LNG') {
-      console.log('🔍 DETAILED Position debug for LNG:');
-      console.log('  - Ticker:', firstTrade.Symbol);
-      console.log('  - Expiration String:', expiration);
-      console.log('  - Parsed Expiration Date:', expirationDate);
-      console.log('  - Today:', today);
-      console.log('  - Current Quantity:', currentQuantity);
-      console.log('  - Trades in Position:');
-      trades.forEach((trade, index) => {
-        console.log(`    [${index}] ID: ${trade.id}, Date: ${trade.Transaction_Date}, Type: ${trade.tradeType}, Status: ${trade.status}, Qty: ${trade.Quantity}`);
-      });
-      
-      // Show quantity calculation step by step (using SWITCH LOGIC)
-      let qty = 0;
-      console.log('  - Quantity Calculation Steps (SWITCH LOGIC):');
-      trades.forEach((trade, index) => {
-        const before = qty;
-        const tradeAction = `${trade.tradeType}/${trade.status}`.toLowerCase();
+        // Add trade to position and update quantity
+        currentPosition.trades.push(trade.id);
+        currentPosition.currentQuantity += trade.tradeType === 'sell' ? -trade.Quantity : trade.Quantity;
         
-        switch (tradeAction) {
-          case 'sell/open': // STO - Sell to Open
-            qty -= trade.Quantity; // Creates short position (negative)
-            break;
-          case 'buy/open': // BTO - Buy to Open
-            qty += trade.Quantity; // Creates long position (positive)
-            break;
-          case 'buy/close': // BTC - Buy to Close
-            qty += trade.Quantity; // Closes short position (reduces negative)
-            break;
-          case 'sell/close': // STC - Sell to Close
-            qty -= trade.Quantity; // Closes long position (reduces positive)
-            break;
-          default:
-            console.warn(`Unknown trade action: ${tradeAction}`);
+        // For options P&L calculation using Book_Cost (includes US tax fees):
+        // Book_Cost is the actual cash flow amount including all fees
+        if (trade.tradeType === 'sell') {
+          // Selling generates credit - use absolute value of Book_Cost
+          currentPosition.totalSalesBookCost += Math.abs(trade.Book_Cost);
+        } else if (trade.tradeType === 'buy') {
+          // Buying generates debit - use absolute value of Book_Cost
+          currentPosition.totalPurchasesBookCost += Math.abs(trade.Book_Cost);
         }
-        
-        const operation = tradeAction.includes('sell') ? '-' : '+';
-        console.log(`    [${index}] ${trade.tradeType}/${trade.status} (${tradeAction}): ${before} → ${qty} (${operation}${trade.Quantity})`);
-      });
-    }
 
-    // Store raw quantity for status determination
-    const rawQuantity = currentQuantity;
-    
-    // Determine position status based on quantity and expiration
-    if (rawQuantity === 0) {
-      // Position was explicitly closed by trades
-      status = 'Closed';
-      closeDate = trades[trades.length - 1].Transaction_Date;
-      console.log(`Position ${firstTrade.Symbol} marked as Closed - raw quantity is 0`);
-    } else if (expirationDate && expirationDate < today) {
-      // Position has contracts remaining, but expiration date has passed
-      status = 'Expired';
-      closeDate = expiration; // Use expiration date as close date for expired positions
-      console.log(`Position ${firstTrade.Symbol} marked as Expired - raw quantity: ${rawQuantity}, past expiration date`);
-      // For expired positions, consider them as having zero P/L from expiration
-      // (premium collected is kept, but no additional profit/loss from assignment)
-    } else {
-      // Position is still open
-      status = 'Open';
-      closeDate = undefined;
-      console.log(`Position ${firstTrade.Symbol} marked as Open - raw quantity: ${rawQuantity}`);
-    }
+        // All trades are processed the same way since they're individual actions
+        // Position status will be determined later based on net quantity
+      }
+    });
 
-    // Create position object
-    const position: Position = {
-      id: positionId,
-      ticker: firstTrade.Symbol, // Use Symbol from Trade
-      strike: firstTrade.StrikePrice, // Use StrikePrice from Trade
-      expiration: firstTrade.StrikeDate, // Use StrikeDate from Trade
-      type: firstTrade.contractType, // Use contractType from Trade
-      status,
-      openDate,
-      closeDate,
-      trades: trades.map(t => t.id),
-      currentQuantity: Math.abs(currentQuantity), // Store as absolute value for display
-      profitLoss
-    };
-
-    return position;
-  }
-
-
-  /**
-   * Generate a unique trade ID
-   */
-  private generateTradeId(): number {
-    // Find highest ID and increment by 1
-    const highestId = this.trades.reduce(
-      (max, trade) => Math.max(max, trade.id), 
-      0
-    );
-    return highestId + 1;
-  }
-
-  /**
-   * Generate a unique string ID for positions
-   */
-  private generateUniqueId(): string {
-    return Math.random().toString(36).substring(2, 10);
-  }
-
-  /**
-   * Parse expiration date from various formats
-   */
-  private parseExpirationDate(dateString: string): Date | null {
-    if (!dateString) return null;
-    
-    try {
-      // Try parsing as-is first
-      let date = new Date(dateString);
+    // Add any remaining open positions to the final positions array
+    openPositions.forEach(position => {
+      // Determine if position should be marked as Closed or Expired
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
       
-      // If invalid, try common formats
-      if (isNaN(date.getTime())) {
-        // Try YYYY-MM-DD format
-        if (/^\d{4}-\d{2}-\d{2}$/.test(dateString)) {
-          date = new Date(dateString + 'T00:00:00');
-        }
-        // Try MM/DD/YYYY format
-        else if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(dateString)) {
-          const parts = dateString.split('/');
-          date = new Date(parseInt(parts[2]), parseInt(parts[0]) - 1, parseInt(parts[1]));
-        }
-        // Try DD-MM-YYYY format
-        else if (/^\d{1,2}-\d{1,2}-\d{4}$/.test(dateString)) {
-          const parts = dateString.split('-');
-          date = new Date(parseInt(parts[2]), parseInt(parts[1]) - 1, parseInt(parts[0]));
+      if (position.status === 'Open' && position.expiration) {
+        const expirationDate = this.parseExpirationDate(position.expiration);
+        if (expirationDate && expirationDate < today) {
+          // Determine status based on whether the position was actively closed (net quantity = 0)
+          // or just expired (net quantity != 0)
+          if (position.currentQuantity === 0) {
+            // Net quantity is zero - position was actively closed by offsetting trades
+            position.status = 'Closed';
+          } else {
+            // Net quantity is not zero - position expired with open contracts
+            position.status = 'Expired';
+          }
+          position.closeDate = position.expiration;
         }
       }
-      
-      // Set to end of day for expiration comparison
-      if (!isNaN(date.getTime())) {
-        date.setHours(23, 59, 59, 999);
-        return date;
-      }
-    } catch (error) {
-      console.warn('Failed to parse expiration date:', dateString, error);
-    }
-    
-    return null;
+      this.positions.push(position);
+    });
   }
 }

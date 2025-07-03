@@ -23,6 +23,7 @@ declare module "@mui/material/styles" {
 
   interface Palette {
     baseShadow: string;
+    primaryDark: ColorRange;
   }
 }
 
@@ -303,6 +304,7 @@ export const colorSchemes = {
         main: brand[400],
         dark: brand[700],
       },
+      primaryDark: brand[800],
       info: {
         contrastText: brand[300],
         light: brand[500],

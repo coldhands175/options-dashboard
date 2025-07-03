@@ -1,0 +1,31 @@
+/* TradingView Widget Theme Overrides */
+
+/* Hide copyright for cleaner look */
+.tradingview-widget-copyright {
+  display: none !important;
+}
+
+/* Light mode - use transparent backgrounds */
+[data-mui-color-scheme="light"] .tradingview-widget-container,
+[data-mui-color-scheme="light"] .tradingview-widget-container__widget,
+[data-mui-color-scheme="light"] .tradingview-widget-container iframe {
+  background-color: transparent !important;
+  background: transparent !important;
+}
+
+/* Dark mode - force dark backgrounds to mask any light backgrounds */
+[data-mui-color-scheme="dark"] .tradingview-widget-container {
+  background-color: hsl(220, 30%, 7%) !important; /* Match MUI dark background */
+  background: hsl(220, 30%, 7%) !important;
+}
+
+[data-mui-color-scheme="dark"] .tradingview-widget-container__widget {
+  background-color: hsl(220, 30%, 7%) !important;
+  background: hsl(220, 30%, 7%) !important;
+}
+
+/* Important: Force all iframe backgrounds to match dark theme */
+[data-mui-color-scheme="dark"] .tradingview-widget-container iframe {
+  background-color: hsl(220, 30%, 7%) !important;
+  background: hsl(220, 30%, 7%) !important;
+}

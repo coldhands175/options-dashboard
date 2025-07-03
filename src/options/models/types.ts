@@ -36,7 +36,9 @@ export interface Position {
   closeDate?: string;         // Date position was closed (if closed)
   trades: number[];           // References to component trade IDs
   currentQuantity: number;    // Current size of position (0 if closed)
-  profitLoss?: number;        // Calculated P/L (only available when closed)
+  totalSalesBookCost: number; // Accumulation of absolute book costs from 'sell' trades
+  totalPurchasesBookCost: number; // Accumulation of absolute book costs from 'buy' trades
+
 }
 
 /**

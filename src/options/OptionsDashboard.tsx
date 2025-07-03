@@ -64,7 +64,7 @@ export default function OptionsDashboard() {
               alignItems: "center",
               mx: 3,
               pb: 5,
-              mt: { xs: 8, md: 10 },
+              mt: { xs: 8, md: 15 }, // Increased top margin to account for TradingView widget (64px toolbar + 60px widget)
             }}
           >
             <OptionsHeader />

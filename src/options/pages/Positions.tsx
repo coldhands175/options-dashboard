@@ -13,7 +13,7 @@ import Paper from "@mui/material/Paper";
 import Chip from "@mui/material/Chip";
 import { Trade, Position } from "../models/types";
 import { PositionManager } from "../models/positionManager";
-import { xanoApi, XanoApiError } from "../../services/xanoApi";
+import { xanoApi } from "../../services/xanoApi";
 
 export default function Positions() {
   const tradesRef = React.useRef<Trade[] | null>(null);
@@ -34,26 +34,78 @@ export default function Positions() {
         const data = await xanoApi.getTransactions();
         tradesRef.current = data as Trade[];
         const fetchedTrades: Trade[] = tradesRef.current.map((item: any) => {
+          // Normalize trade type: "Sold" -> "sell", "Bought" -> "buy"
+          let normalizedTradeType = 'other';
+          if (item.tradeType) {
+            const tradeTypeLower = item.tradeType.toLowerCase();
+            if (tradeTypeLower.includes('sold') || tradeTypeLower.includes('sell')) {
+              normalizedTradeType = 'sell';
+            } else if (tradeTypeLower.includes('bought') || tradeTypeLower.includes('buy')) {
+              normalizedTradeType = 'buy';
+            }
+          }
+          
+          // Normalize status: "Open" -> "open", "Closed" -> "close"
+          let normalizedStatus = 'open';
+          if (item.status) {
+            const statusLower = item.status.toLowerCase();
+            if (statusLower.includes('close')) {
+              normalizedStatus = 'close';
+            } else if (statusLower.includes('open')) {
+              normalizedStatus = 'open';
+            }
+          }
+          
           const mappedItem: Trade = {
             id: item.id,
             Transaction_Date: item.Transaction_Date,
-            tradeType: item.tradeType ?? 'Other',
+            tradeType: normalizedTradeType,
             Symbol: item.Symbol,
             contractType: item.contractType,
-            Quantity: item.Quantity ?? 0,
+            Quantity: Number(item.Quantity) || 0,
             StrikeDate: item.StrikeDate ?? '',
-            StrikePrice: item.StrikePrice ?? 0,
-            PremiumValue: item.PremiumValue ?? 0,
-            Book_Cost: item.Book_Cost ?? 0,
+            StrikePrice: Number(item.StrikePrice) || 0,
+            PremiumValue: Number(item.PremiumValue) || 0,
+            Book_Cost: Number(item.Book_Cost) || 0,
             Security_Number: item.Security_Number,
-            status: item.status ?? 'Open',
-            profitLoss: item.profitLoss ?? 0,
+            status: normalizedStatus,
           };
           return mappedItem;
         });
 
+        console.log('Fetched trades for position manager:', fetchedTrades.length, 'trades');
+        if (fetchedTrades.length > 0) {
+          console.log('First trade sample:', {
+            id: fetchedTrades[0].id,
+            tradeType: fetchedTrades[0].tradeType,
+            status: fetchedTrades[0].status,
+            Symbol: fetchedTrades[0].Symbol,
+            PremiumValue: fetchedTrades[0].PremiumValue,
+            Book_Cost: fetchedTrades[0].Book_Cost
+          });
+        }
+        
         const positionManager = new PositionManager(fetchedTrades);
-        setPositions(positionManager.getPositions());
+        const calculatedPositions = positionManager.getPositions();
+        
+        console.log('Calculated positions:', calculatedPositions);
+        calculatedPositions.forEach((pos, index) => {
+          if (index < 5) { // Log first 5 positions to avoid console spam
+            console.log(`Position ${index + 1}:`, {
+              id: pos.id,
+              ticker: pos.ticker,
+              type: pos.type,
+              status: pos.status,
+              expiration: pos.expiration,
+              totalSales: pos.totalSalesBookCost,
+              totalPurchases: pos.totalPurchasesBookCost,
+              pnl: pos.totalSalesBookCost - pos.totalPurchasesBookCost,
+              trades: pos.trades
+            });
+          }
+        });
+        
+        setPositions(calculatedPositions);
       } catch (err) {
         setError((err as Error).message);
       } finally {
@@ -115,9 +167,9 @@ export default function Positions() {
                     <TableCell align="right">
                       <Typography
                         fontWeight="medium"
-                        color={(position.profitLoss ?? 0) >= 0 ? "success.main" : "error.main"}
+                        color={(position.totalSalesBookCost - position.totalPurchasesBookCost) >= 0 ? "success.main" : "error.main"}
                       >
-                        {(position.profitLoss ?? 0) >= 0 ? "+" : ""}${(position.profitLoss ?? 0).toFixed(2)}
+                        {(position.totalSalesBookCost - position.totalPurchasesBookCost) >= 0 ? "+" : ""}${(position.totalSalesBookCost - position.totalPurchasesBookCost).toFixed(2)}
                       </Typography>
                     </TableCell>
                     <TableCell>
