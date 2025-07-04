@@ -14,7 +14,7 @@ import MoreIcon from "@mui/icons-material/MoreVert";
 import SearchIcon from "@mui/icons-material/Search";
 import LogoutIcon from "@mui/icons-material/Logout";
 import InputBase from "@mui/material/InputBase";
-import { alpha, styled, useTheme } from "@mui/material/styles";
+import { alpha, styled } from "@mui/material/styles";
 import TradingViewWidget from "../../components/TradingViewWidget";
 import { useAuth } from "../../context/AuthContext";
 
