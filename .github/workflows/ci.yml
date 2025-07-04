@@ -30,7 +30,7 @@ jobs:
       run: echo "Skipping linter for this PR - will fix in subsequent PR"
       
     - name: Run tests
-      run: npm test -- --coverage --watchAll=false
+      run: npm run test:coverage
       
     - name: Build project
       run: npm run build
