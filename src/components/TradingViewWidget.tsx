@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-import { Box, useTheme, alpha } from '@mui/material';
+import { Box, useTheme } from '@mui/material';
 
 interface TradingViewWidgetProps {
   symbols?: Array<{
@@ -128,8 +128,9 @@ const TradingViewWidget: React.FC<TradingViewWidgetProps> = ({
     // Cleanup function
     return () => {
       clearTimeout(timeoutId);
-      if (containerRef.current) {
-        containerRef.current.innerHTML = '';
+      const container = containerRef.current;
+      if (container) {
+        container.innerHTML = '';
       }
     };
   }, [symbols, effectiveColorTheme, showSymbolLogo, isTransparent, displayMode, locale, theme.palette.mode]);
