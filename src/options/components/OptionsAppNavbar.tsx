@@ -258,16 +258,9 @@ export default function OptionsAppNavbar() {
                 : theme.palette.grey[200]
             }`,
             backgroundColor: (theme) =>
-              theme.palette.mode === 'dark' 
-                ? theme.palette.background.paper
-                : alpha(theme.palette.background.paper, 0.8),
-            // Force background for dark mode
-            ...(theme.palette.mode === 'dark' && {
-              background: `${theme.palette.background.paper} !important`,
-              '& *': {
-                backgroundColor: `${theme.palette.background.paper} !important`
-              }
-            }),
+              alpha(theme.palette.background.default, 0.72),
+            backdropFilter: 'blur(6px)',
+            WebkitBackdropFilter: 'blur(6px)',
             // Aggressively override TradingView widget backgrounds
             '& .tradingview-widget-container': {
               backgroundColor: 'transparent !important',

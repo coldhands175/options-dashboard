@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-import { Box, useTheme } from '@mui/material';
+import { Box, useTheme, alpha } from '@mui/material';
 
 interface TradingViewWidgetProps {
   symbols?: Array<{
@@ -72,10 +72,9 @@ const TradingViewWidget: React.FC<TradingViewWidgetProps> = ({
         const widgetConfig = {
           symbols,
           colorTheme: effectiveColorTheme,
-          theme: effectiveColorTheme, // Some widgets use 'theme' instead of 'colorTheme'
           locale,
           largeChartUrl: "",
-          isTransparent: true, // Always use transparent background
+          isTransparent: false, // Don't use transparent, use solid color
           showSymbolLogo,
           displayMode
         };
@@ -143,21 +142,18 @@ const TradingViewWidget: React.FC<TradingViewWidgetProps> = ({
         width: '100%',
         height: '100%',
         minHeight: '60px',
-        backgroundColor: effectiveColorTheme === 'dark' ? 'transparent' : 'inherit',
+        // Use the same background as the navbar
+        backgroundColor: (theme) => alpha(theme.palette.background.default, 0.72),
         '& .tradingview-widget-copyright': {
           display: 'none' // Hide copyright in navbar version
         },
         '& .tradingview-widget-container__widget': {
-          backgroundColor: effectiveColorTheme === 'dark' ? 'transparent' : 'inherit',
+          backgroundColor: 'inherit',
           borderRadius: theme.shape.borderRadius,
         },
-        // Override any light theme styles when in dark mode
-        ...(effectiveColorTheme === 'dark' && {
-          filter: 'none',
-          '& iframe': {
-            backgroundColor: 'transparent !important'
-          }
-        })
+        '& iframe': {
+          backgroundColor: 'inherit !important'
+        }
       }}
     />
   );
