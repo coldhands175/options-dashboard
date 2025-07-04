@@ -188,7 +188,7 @@ export const xanoApi = {
   },
 
   // User management
-  async changePassword(currentPassword: string, newPassword: string) {
+  async changePassword(_currentPassword: string, _newPassword: string) {
     const authToken = getAuthToken();
     if (!authToken) {
       throw new XanoApiError('Authentication required. Please log in.', 401, 'NO_AUTH_TOKEN');
@@ -213,7 +213,7 @@ export const xanoApi = {
   },
 
   // Password reset functionality
-  async requestPasswordReset(email: string) {
+  async requestPasswordReset(_email: string) {
     // For now, we'll return a placeholder response
     // In the future, you can implement the actual API call to Xano
     // when you create the password reset endpoint
@@ -231,7 +231,7 @@ export const xanoApi = {
     return { success: true, message: 'Password reset email sent' };
   },
 
-  async resetPassword(token: string, email: string, newPassword: string) {
+  async resetPassword(_token: string, _email: string, _newPassword: string) {
     // For now, we'll return a placeholder response
     // In the future, you can implement the actual API call to Xano
     await new Promise(resolve => setTimeout(resolve, 1500)); // Simulate API delay

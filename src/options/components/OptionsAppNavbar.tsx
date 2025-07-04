@@ -59,7 +59,6 @@ const StyledInputBase = styled(InputBase)(({ theme }) => ({
 }));
 
 export default function OptionsAppNavbar() {
-  const theme = useTheme();
   const { user, logout } = useAuth();
   
   const [anchorEl, setAnchorEl] = React.useState<null | HTMLElement>(null);
