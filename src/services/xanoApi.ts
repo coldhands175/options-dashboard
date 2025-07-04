@@ -3,7 +3,13 @@
  */
 
 const BASE_URL = 'https://xtwz-brgd-1r1u.n7c.xano.io/api:8GoBSeHO';
-const AUTH_TOKEN = import.meta.env.VITE_XANO_AUTH_TOKEN;
+
+/**
+ * Get the current authentication token from localStorage
+ */
+function getAuthToken(): string | null {
+  return localStorage.getItem('authToken');
+}
 
 // Rate limiting: Simple in-memory cache to prevent excessive API calls
 class RateLimitedCache {
@@ -57,7 +63,8 @@ export class XanoApiError extends Error {
  */
 async function xanoRequest(
   endpoint: string, 
-  options: RequestInit = {}
+  options: RequestInit = {},
+  requireAuth: boolean = true
 ): Promise<any> {
   try {
     // Check cache first
@@ -71,17 +78,24 @@ async function xanoRequest(
     // Enforce rate limiting
     await cache.enforceRateLimit();
 
-    if (!AUTH_TOKEN) {
-      throw new Error('Xano auth token not found. Please check your environment variables.');
+    const authToken = getAuthToken();
+    if (requireAuth && !authToken) {
+      throw new XanoApiError('Authentication required. Please log in.', 401, 'NO_AUTH_TOKEN');
+    }
+
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      ...options.headers as Record<string, string>,
+    };
+
+    // Add authorization header if we have a token
+    if (authToken) {
+      headers['Authorization'] = `Bearer ${authToken}`;
     }
 
     const response = await fetch(`${BASE_URL}${endpoint}`, {
       ...options,
-      headers: {
-        'Authorization': `Bearer ${AUTH_TOKEN}`,
-        'Content-Type': 'application/json',
-        ...options.headers,
-      },
+      headers,
     });
 
     if (!response.ok) {
@@ -93,7 +107,10 @@ async function xanoRequest(
         message = 'Too many requests. Please wait before trying again.';
       } else if (response.status === 401) {
         code = 'UNAUTHORIZED';
-        message = 'Invalid authentication token.';
+        message = 'Invalid authentication token. Please log in again.';
+        // Clear invalid token
+        localStorage.removeItem('authToken');
+        localStorage.removeItem('userData');
       }
       
       throw new XanoApiError(message, response.status, code);
@@ -121,13 +138,32 @@ export const xanoApi = {
   },
 
   async uploadTransactionDocuments(formData: FormData) {
-    return xanoRequest('/transaction_documents', {
+    const authToken = getAuthToken();
+    if (!authToken) {
+      throw new XanoApiError('Authentication required. Please log in.', 401, 'NO_AUTH_TOKEN');
+    }
+
+    // For file uploads, we need to handle headers differently
+    const response = await fetch(`${BASE_URL}/transaction_documents`, {
       method: 'POST',
-      body: formData,
       headers: {
+        'Authorization': `Bearer ${authToken}`,
         // Don't set Content-Type for FormData, let browser set it with boundary
-      }
+      },
+      body: formData,
     });
+
+    if (!response.ok) {
+      let message = `Xano API Error: ${response.status} ${response.statusText}`;
+      if (response.status === 401) {
+        message = 'Invalid authentication token. Please log in again.';
+        localStorage.removeItem('authToken');
+        localStorage.removeItem('userData');
+      }
+      throw new XanoApiError(message, response.status);
+    }
+
+    return response.json();
   },
 
   // Add other API endpoints as needed
@@ -149,5 +185,68 @@ export const xanoApi = {
     return xanoRequest(`/transactions/${id}`, {
       method: 'DELETE',
     });
+  },
+
+  // User management
+  async changePassword(currentPassword: string, newPassword: string) {
+    const authToken = getAuthToken();
+    if (!authToken) {
+      throw new XanoApiError('Authentication required. Please log in.', 401, 'NO_AUTH_TOKEN');
+    }
+
+    // For now, we'll return a placeholder response
+    // In the future, you can implement the actual API call to Xano
+    // when you create the change password endpoint
+    await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate API delay
+    
+    // TODO: Implement actual password change API call
+    // Example implementation would look like:
+    // return xanoRequest('/auth/change-password', {
+    //   method: 'PATCH',
+    //   body: JSON.stringify({
+    //     currentPassword,
+    //     newPassword,
+    //   }),
+    // });
+    
+    return { success: true, message: 'Password changed successfully' };
+  },
+
+  // Password reset functionality
+  async requestPasswordReset(email: string) {
+    // For now, we'll return a placeholder response
+    // In the future, you can implement the actual API call to Xano
+    // when you create the password reset endpoint
+    await new Promise(resolve => setTimeout(resolve, 1500)); // Simulate API delay
+    
+    // TODO: Implement actual password reset request API call
+    // Example implementation would look like:
+    // return xanoRequest('/auth/request-password-reset', {
+    //   method: 'POST',
+    //   body: JSON.stringify({
+    //     email,
+    //   }),
+    // }, false); // false = no auth required
+    
+    return { success: true, message: 'Password reset email sent' };
+  },
+
+  async resetPassword(token: string, email: string, newPassword: string) {
+    // For now, we'll return a placeholder response
+    // In the future, you can implement the actual API call to Xano
+    await new Promise(resolve => setTimeout(resolve, 1500)); // Simulate API delay
+    
+    // TODO: Implement actual password reset API call
+    // Example implementation would look like:
+    // return xanoRequest('/auth/reset-password', {
+    //   method: 'POST',
+    //   body: JSON.stringify({
+    //     token,
+    //     email,
+    //     newPassword,
+    //   }),
+    // }, false); // false = no auth required
+    
+    return { success: true, message: 'Password reset successful' };
   }
 };

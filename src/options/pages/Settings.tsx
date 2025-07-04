@@ -23,8 +23,11 @@ import AccountCircleIcon from "@mui/icons-material/AccountCircle";
 import VisibilityIcon from "@mui/icons-material/Visibility";
 import AttachMoneyIcon from "@mui/icons-material/AttachMoney";
 import BarChartIcon from "@mui/icons-material/BarChart";
+import ChangePassword from "../../components/ChangePassword";
+import { useAuth } from "../../hooks/useAuth";
 
 export default function Settings() {
+  const { user } = useAuth();
   const [notificationsEnabled, setNotificationsEnabled] = React.useState(true);
   const [darkModeEnabled, setDarkModeEnabled] = React.useState(false);
   const [defaultCurrency, setDefaultCurrency] = React.useState("USD");
@@ -50,7 +53,7 @@ export default function Settings() {
                 <TextField
                   fullWidth
                   label="Display Name"
-                  defaultValue="John Smith"
+                  defaultValue={`${user?.firstName} ${user?.lastName}`.trim() || "User"}
                   variant="outlined"
                   size="small"
                   sx={{ mb: 2 }}
@@ -58,10 +61,12 @@ export default function Settings() {
                 <TextField
                   fullWidth
                   label="Email Address"
-                  defaultValue="john.smith@example.com"
+                  value={user?.email || ""}
                   variant="outlined"
                   size="small"
                   sx={{ mb: 2 }}
+                  disabled
+                  helperText="Email cannot be changed"
                 />
                 <Button 
                   variant="outlined" 
@@ -71,45 +76,17 @@ export default function Settings() {
                   Update Profile
                 </Button>
               </Box>
-              
-              <Box>
-                <Typography variant="subtitle1" sx={{ mb: 1 }}>
-                  Change Password
-                </Typography>
-                <TextField
-                  fullWidth
-                  label="Current Password"
-                  type="password"
-                  variant="outlined"
-                  size="small"
-                  sx={{ mb: 2 }}
-                />
-                <TextField
-                  fullWidth
-                  label="New Password"
-                  type="password"
-                  variant="outlined"
-                  size="small"
-                  sx={{ mb: 2 }}
-                />
-                <TextField
-                  fullWidth
-                  label="Confirm New Password"
-                  type="password"
-                  variant="outlined"
-                  size="small"
-                  sx={{ mb: 2 }}
-                />
-                <Button 
-                  variant="outlined" 
-                  color="primary"
-                  sx={{ mt: 1 }}
-                >
-                  Change Password
-                </Button>
-              </Box>
             </CardContent>
           </Card>
+        </Grid>
+        
+        {/* Change Password */}
+        <Grid size={{ xs: 12 }}>
+          <ChangePassword 
+            onPasswordChanged={() => {
+              console.log('Password changed successfully');
+            }}
+          />
         </Grid>
         
         {/* Preferences */}

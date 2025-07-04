@@ -12,9 +12,11 @@ import AccountCircle from "@mui/icons-material/AccountCircle";
 import NotificationsIcon from "@mui/icons-material/Notifications";
 import MoreIcon from "@mui/icons-material/MoreVert";
 import SearchIcon from "@mui/icons-material/Search";
+import LogoutIcon from "@mui/icons-material/Logout";
 import InputBase from "@mui/material/InputBase";
 import { alpha, styled, useTheme } from "@mui/material/styles";
 import TradingViewWidget from "../../components/TradingViewWidget";
+import { useAuth } from "../../context/AuthContext";
 
 const Search = styled("div")(({ theme }) => ({
   position: "relative",
@@ -58,7 +60,7 @@ const StyledInputBase = styled(InputBase)(({ theme }) => ({
 
 export default function OptionsAppNavbar() {
   const theme = useTheme();
-  
+  const { user, logout } = useAuth();
   
   const [anchorEl, setAnchorEl] = React.useState<null | HTMLElement>(null);
   const [mobileMoreAnchorEl, setMobileMoreAnchorEl] =
@@ -78,6 +80,11 @@ export default function OptionsAppNavbar() {
   const handleMenuClose = () => {
     setAnchorEl(null);
     handleMobileMenuClose();
+  };
+
+  const handleLogout = () => {
+    logout();
+    handleMenuClose();
   };
 
   const handleMobileMenuOpen = (event: React.MouseEvent<HTMLElement>) => {
@@ -104,7 +111,10 @@ export default function OptionsAppNavbar() {
       <MenuItem onClick={handleMenuClose}>Profile</MenuItem>
       <MenuItem onClick={handleMenuClose}>My account</MenuItem>
       <MenuItem onClick={handleMenuClose}>Settings</MenuItem>
-      <MenuItem onClick={handleMenuClose}>Logout</MenuItem>
+      <MenuItem onClick={handleLogout}>
+        <LogoutIcon sx={{ mr: 1 }} />
+        Logout
+      </MenuItem>
     </Menu>
   );
 
@@ -219,6 +229,7 @@ export default function OptionsAppNavbar() {
               aria-haspopup="true"
               onClick={handleProfileMenuOpen}
               color="inherit"
+              title={user?.email}
             >
               <AccountCircle />
             </IconButton>

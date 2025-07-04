@@ -1,9 +1,18 @@
 import * as React from 'react';
+import { Navigate } from 'react-router-dom';
 import { Box, Typography, Button, Paper, TextField, Divider, CircularProgress } from '@mui/material';
 import CloudUploadIcon from '@mui/icons-material/CloudUpload';
 import { xanoApi, XanoApiError } from '../../services/xanoApi';
+import { useAuth } from '../../hooks/useAuth';
 
 export default function UploadTrades() {
+  const { isAdmin, user, checkAdminAccess } = useAuth();
+  
+  // Redirect non-admin users to dashboard
+  if (!isAdmin) {
+    return <Navigate to="/" replace />;
+  }
+  
   const [naturalLanguageInput, setNaturalLanguageInput] = React.useState('');
   const [selectedFiles, setSelectedFiles] = React.useState<File[]>([]);
   const [isPdfUploading, setIsPdfUploading] = React.useState(false);
@@ -18,6 +27,13 @@ export default function UploadTrades() {
   };
 
   const handlePdfUpload = async () => {
+    try {
+      checkAdminAccess();
+    } catch (error: any) {
+      setPdfUploadError(error.message);
+      return;
+    }
+
     if (selectedFiles.length === 0) {
       setPdfUploadError("Please select at least one PDF file to upload.");
       return;
@@ -51,6 +67,13 @@ export default function UploadTrades() {
   };
 
   const handleNaturalLanguageSubmit = () => {
+    try {
+      checkAdminAccess();
+    } catch (error: any) {
+      alert(error.message);
+      return;
+    }
+
     if (naturalLanguageInput.trim()) {
       console.log('Submitting natural language input:', naturalLanguageInput);
       // TODO: Implement actual natural language processing and submission to Xano API
@@ -99,12 +122,12 @@ export default function UploadTrades() {
           onChange={handleFileUpload}
         />
         <label htmlFor="upload-button-file">
-          <Button
-            variant="contained"
-            component="span"
-            startIcon={<CloudUploadIcon />}
-            disabled={isPdfUploading}
-          >
+        <Button
+          variant="contained"
+          component="span"
+          startIcon={<CloudUploadIcon />}
+          disabled={isPdfUploading || !isAdmin}
+        >
             {isPdfUploading ? <CircularProgress size={24} /> : "Select PDF File"}
           </Button>
         </label>
@@ -140,7 +163,7 @@ export default function UploadTrades() {
           color="primary"
           onClick={handlePdfUpload}
           sx={{ mt: 2 }}
-          disabled={selectedFiles.length === 0 || isPdfUploading}
+          disabled={selectedFiles.length === 0 || isPdfUploading || !isAdmin}
         >
           {isPdfUploading ? <CircularProgress size={24} /> : "Upload PDF"}
         </Button>
@@ -165,10 +188,12 @@ export default function UploadTrades() {
         onChange={(e) => setNaturalLanguageInput(e.target.value)}
         sx={{ mb: 2 }}
         placeholder="e.g., 'Sold 5 TSLA calls, strike $200, expiry 2024-12-20 for $5.50 premium each.'"
+        disabled={!isAdmin}
       />
       <Button
         variant="contained"
         onClick={handleNaturalLanguageSubmit}
+        disabled={!isAdmin}
       >
         Submit Trade Details
       </Button>

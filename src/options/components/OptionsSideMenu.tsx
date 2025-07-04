@@ -16,21 +16,39 @@ import CompareArrowsRoundedIcon from "@mui/icons-material/CompareArrowsRounded";
 import InsightsRoundedIcon from "@mui/icons-material/InsightsRounded";
 import SettingsRoundedIcon from "@mui/icons-material/SettingsRounded";
 import CloudUploadRoundedIcon from "@mui/icons-material/CloudUploadRounded";
+import { useAuth } from "../../hooks/useAuth";
 const drawerWidth = 240;
 
-const menuItems = [
+// Base menu items available to all users
+const baseMenuItems = [
   { text: "Dashboard", icon: <DashboardRoundedIcon />, path: "/" },
   { text: "Portfolio", icon: <AccountBalanceWalletRoundedIcon />, path: "/portfolio" },
   { text: "Positions", icon: <ShowChartRoundedIcon />, path: "/positions" },
   { text: "Watchlist", icon: <StarRoundedIcon />, path: "/watchlist" },
   { text: "Trades", icon: <CompareArrowsRoundedIcon />, path: "/trades" },
   { text: "Analytics", icon: <InsightsRoundedIcon />, path: "/analytics" },
+];
+
+// Admin-only menu items
+const adminMenuItems = [
   { text: "Upload Trades", icon: <CloudUploadRoundedIcon />, path: "/upload-trades" },
+];
+
+// Settings item (available to all users)
+const settingsMenuItem = [
   { text: "Settings", icon: <SettingsRoundedIcon />, path: "/settings" },
 ];
 
 export default function OptionsSideMenu() {
   const location = useLocation();
+  const { isAdmin } = useAuth();
+  
+  // Build menu items based on user permissions
+  const menuItems = [
+    ...baseMenuItems,
+    ...(isAdmin ? adminMenuItems : []),
+    ...settingsMenuItem,
+  ];
   
   // Helper function to determine if a path is active
   const isActive = (path: string) => {
