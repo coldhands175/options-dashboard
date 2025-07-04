@@ -261,20 +261,7 @@ export default function OptionsAppNavbar() {
               alpha(theme.palette.background.default, 0.72),
             backdropFilter: 'blur(6px)',
             WebkitBackdropFilter: 'blur(6px)',
-            // Aggressively override TradingView widget backgrounds
-            '& .tradingview-widget-container': {
-              backgroundColor: 'transparent !important',
-            },
-            '& .tradingview-widget-container__widget': {
-              backgroundColor: 'transparent !important',
-            },
-            '& iframe': {
-              backgroundColor: 'transparent !important',
-            },
-            // Target the widget's internal styling
-            '& [data-widget-host="tradingview"]': {
-              backgroundColor: 'transparent !important',
-            }
+            // Let TradingView widget handle its own background
           }}
         >
           <TradingViewWidget 

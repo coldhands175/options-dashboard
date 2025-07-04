@@ -5,21 +5,22 @@
   display: none !important;
 }
 
-/* Force all TradingView widget backgrounds to inherit from parent */
+/* Force all TradingView widget backgrounds to be transparent */
 .tradingview-widget-container,
 .tradingview-widget-container__widget,
 .tradingview-widget-container iframe {
-  background-color: inherit !important;
-  background: inherit !important;
+  background-color: transparent !important;
+  background: transparent !important;
 }
 
 /* Additional targeting for stubborn elements */
-.tradingview-widget-container * {
-  background-color: inherit !important;
+.tradingview-widget-container *:not(span):not(div[style*="color"]) {
+  background-color: transparent !important;
 }
 
 /* Target any inline styles that might override */
-.tradingview-widget-container [style*="background"] {
-  background-color: inherit !important;
-  background: inherit !important;
+.tradingview-widget-container [style*="background-color"],
+.tradingview-widget-container [style*="background:"] {
+  background-color: transparent !important;
+  background: transparent !important;
 }

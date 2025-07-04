@@ -142,17 +142,17 @@ const TradingViewWidget: React.FC<TradingViewWidgetProps> = ({
         width: '100%',
         height: '100%',
         minHeight: '60px',
-        // Use the same background as the navbar
-        backgroundColor: (theme) => alpha(theme.palette.background.default, 0.72),
+        // Make completely transparent to inherit parent background
+        backgroundColor: 'transparent',
         '& .tradingview-widget-copyright': {
           display: 'none' // Hide copyright in navbar version
         },
         '& .tradingview-widget-container__widget': {
-          backgroundColor: 'inherit',
+          backgroundColor: 'transparent',
           borderRadius: theme.shape.borderRadius,
         },
         '& iframe': {
-          backgroundColor: 'inherit !important'
+          backgroundColor: 'transparent !important'
         }
       }}
     />
