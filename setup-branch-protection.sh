@@ -14,28 +14,42 @@ echo "Setting up protection for main branch..."
 gh api repos/$REPO_OWNER/$REPO_NAME/branches/main/protection \
   --method PUT \
   --header "Accept: application/vnd.github.v3+json" \
-  --field required_status_checks='{"strict":true,"contexts":["test (18.x)","test (20.x)","security-scan"]}' \
-  --field enforce_admins=true \
-  --field required_pull_request_reviews='{"required_approving_review_count":1,"dismiss_stale_reviews":true,"require_code_owner_reviews":false,"require_last_push_approval":false}' \
-  --field restrictions='null' \
-  --field allow_force_pushes=false \
-  --field allow_deletions=false \
-  --field block_creations=false \
-  --field required_conversation_resolution=true
+  --input - <<< '{
+    "required_status_checks": null,
+    "enforce_admins": true,
+    "required_pull_request_reviews": {
+      "required_approving_review_count": 1,
+      "dismiss_stale_reviews": true,
+      "require_code_owner_reviews": false,
+      "require_last_push_approval": false
+    },
+    "restrictions": null,
+    "allow_force_pushes": false,
+    "allow_deletions": false,
+    "block_creations": false,
+    "required_conversation_resolution": true
+  }'
 
 # Protect develop branch
 echo "Setting up protection for develop branch..."
 gh api repos/$REPO_OWNER/$REPO_NAME/branches/develop/protection \
   --method PUT \
   --header "Accept: application/vnd.github.v3+json" \
-  --field required_status_checks='{"strict":true,"contexts":["test (18.x)","test (20.x)","security-scan"]}' \
-  --field enforce_admins=false \
-  --field required_pull_request_reviews='{"required_approving_review_count":1,"dismiss_stale_reviews":true,"require_code_owner_reviews":false,"require_last_push_approval":false}' \
-  --field restrictions='null' \
-  --field allow_force_pushes=false \
-  --field allow_deletions=false \
-  --field block_creations=false \
-  --field required_conversation_resolution=true
+  --input - <<< '{
+    "required_status_checks": null,
+    "enforce_admins": false,
+    "required_pull_request_reviews": {
+      "required_approving_review_count": 1,
+      "dismiss_stale_reviews": true,
+      "require_code_owner_reviews": false,
+      "require_last_push_approval": false
+    },
+    "restrictions": null,
+    "allow_force_pushes": false,
+    "allow_deletions": false,
+    "block_creations": false,
+    "required_conversation_resolution": true
+  }'
 
 echo "Branch protection rules have been set up!"
 echo ""
