@@ -18,7 +18,7 @@ const TradingViewWidget: React.FC<TradingViewWidgetProps> = ({
     { proName: "NYSE:BBAI", title: "Big Bear AI" },
     { proName: "NASDAQ:MSFT", title: "Microsoft" },
     { proName: "NASDAQ:MSTR", title: "Microstrategy" },
-    { proName: "NASDAQ:NVDA", title: "Nvidida" },
+    { proName: "NASDAQ:NVDA", title: "Nvidia" },
     { proName: "NASDAQ:PLTR", title: "Palantir" },
     { proName: "NYSE:LNG", title: "Cheniere" },
     { proName: "NASDAQ:SYM", title: "Symbotic" }
