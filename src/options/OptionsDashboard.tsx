@@ -19,6 +19,7 @@ import Trades from "./pages/Trades";
 import Analytics from "./pages/Analytics";
 import Settings from "./pages/Settings";
 import UploadTrades from "./pages/UploadTrades";
+import Notes from "./pages/Notes";
 import AppTheme from "../shared-theme/AppTheme";
 import {
   chartsCustomizations,
@@ -75,6 +76,7 @@ export default function OptionsDashboard() {
               <Route path="watchlist" element={<Watchlist />} />
               <Route path="trades" element={<Trades />} />
               <Route path="analytics" element={<Analytics />} />
+              <Route path="notes" element={<Notes />} />
               <Route path="settings" element={<Settings />} />
               <Route path="upload-trades" element={<UploadTrades />} />
             </Routes>

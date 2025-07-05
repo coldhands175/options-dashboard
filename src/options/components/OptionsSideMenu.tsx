@@ -16,6 +16,7 @@ import CompareArrowsRoundedIcon from "@mui/icons-material/CompareArrowsRounded";
 import InsightsRoundedIcon from "@mui/icons-material/InsightsRounded";
 import SettingsRoundedIcon from "@mui/icons-material/SettingsRounded";
 import CloudUploadRoundedIcon from "@mui/icons-material/CloudUploadRounded";
+import NoteIcon from "@mui/icons-material/Note";
 import { useAuth } from "../../hooks/useAuth";
 const drawerWidth = 240;
 
@@ -27,6 +28,7 @@ const baseMenuItems = [
   { text: "Watchlist", icon: <StarRoundedIcon />, path: "/watchlist" },
   { text: "Trades", icon: <CompareArrowsRoundedIcon />, path: "/trades" },
   { text: "Analytics", icon: <InsightsRoundedIcon />, path: "/analytics" },
+  { text: "Notes", icon: <NoteIcon />, path: "/notes" },
 ];
 
 // Admin-only menu items
