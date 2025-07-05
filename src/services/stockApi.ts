@@ -2,8 +2,13 @@
  * Stock market data API service using Polygon.io
  */
 
-const POLYGON_API_KEY = 'z74avT5hoTIbszqRfJu5xJ0hRvbfSaQW';
+const POLYGON_API_KEY = import.meta.env.VITE_POLYGON_API_KEY;
 const POLYGON_BASE_URL = 'https://api.polygon.io';
+
+// Validate API key is configured
+if (!POLYGON_API_KEY) {
+  console.warn('⚠️ POLYGON_API_KEY not configured. Stock data features will be disabled.');
+}
 
 // Rate limiting: Simple in-memory cache to prevent excessive API calls
 class StockDataCache {
@@ -60,6 +65,11 @@ export class StockApiError extends Error {
  */
 async function polygonRequest(endpoint: string): Promise<any> {
   try {
+    // Check if API key is configured
+    if (!POLYGON_API_KEY) {
+      throw new StockApiError('Polygon API key not configured', 401, 'API_KEY_MISSING');
+    }
+
     // Check cache first
     const cacheKey = endpoint;
     const cachedData = await stockCache.get(cacheKey);

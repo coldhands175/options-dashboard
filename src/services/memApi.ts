@@ -2,6 +2,11 @@
 const MEM_API_BASE_URL = import.meta.env.DEV ? '/api/mem/v2' : 'https://api.mem.ai/v2';
 const MEM_API_KEY = import.meta.env.VITE_MEM_API_KEY;
 
+// Validate API key is configured
+if (!MEM_API_KEY) {
+  console.warn('⚠️ MEM_API_KEY not configured. Notes sync to Mem will be disabled.');
+}
+
 export interface MemNote {
   id: string;
   content: string;
@@ -34,6 +39,10 @@ class MemApiService {
 
   // Create note using the mem-it endpoint which works reliably
   async createNote(noteData: CreateMemNoteRequest): Promise<any> {
+    if (!MEM_API_KEY) {
+      throw new Error('Mem API key not configured. Cannot sync notes to Mem.');
+    }
+
     const response = await fetch(`${MEM_API_BASE_URL}/mem-it`, {
       method: 'POST',
       headers: this.getHeaders(),
