@@ -11,6 +11,16 @@ import TableHead from "@mui/material/TableHead";
 import TableRow from "@mui/material/TableRow";
 import Paper from "@mui/material/Paper";
 import Chip from "@mui/material/Chip";
+import FormControl from "@mui/material/FormControl";
+import InputLabel from "@mui/material/InputLabel";
+import Select from "@mui/material/Select";
+import MenuItem from "@mui/material/MenuItem";
+import Grid from "@mui/material/Grid";
+import TableSortLabel from "@mui/material/TableSortLabel";
+import IconButton from "@mui/material/IconButton";
+import Collapse from "@mui/material/Collapse";
+import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
+import ExpandLessIcon from "@mui/icons-material/ExpandLess";
 import { Trade, Position } from "../models/types";
 import { PositionManager } from "../models/positionManager";
 import { xanoApi } from "../../services/xanoApi";
@@ -18,13 +28,23 @@ import { xanoApi } from "../../services/xanoApi";
 export default function Positions() {
   const tradesRef = React.useRef<Trade[] | null>(null);
   const [positions, setPositions] = React.useState<Position[]>([]);
+  const [allPositions, setAllPositions] = React.useState<Position[]>([]);
   const [loading, setLoading] = React.useState<boolean>(true);
   const [error, setError] = React.useState<string | null>(null);
+  const [sortBy, setSortBy] = React.useState<keyof Position>('ticker');
+  const [sortOrder, setSortOrder] = React.useState<'asc' | 'desc'>('asc');
+  const [yearFilter, setYearFilter] = React.useState<string>('All');
+  const [symbolFilter, setSymbolFilter] = React.useState<string>('All');
+  const [expandedRows, setExpandedRows] = React.useState<Set<string>>(new Set());
+  const [allTrades, setAllTrades] = React.useState<Trade[]>([]);
 
   React.useEffect(() => {
     if (tradesRef.current) {
       const positionManager = new PositionManager(tradesRef.current);
-      setPositions(positionManager.getPositions());
+      const calculatedPositions = positionManager.getPositions();
+      setPositions(calculatedPositions);
+      setAllPositions(calculatedPositions);
+      setAllTrades(tradesRef.current);
       setLoading(false);
       return;
     }
@@ -106,6 +126,8 @@ export default function Positions() {
         });
         
         setPositions(calculatedPositions);
+        setAllPositions(calculatedPositions);
+        setAllTrades(fetchedTrades);
       } catch (err) {
         setError((err as Error).message);
       } finally {
@@ -115,6 +137,78 @@ export default function Positions() {
 
     fetchPositions();
   }, []);
+
+  // Filter and sort effect
+  React.useEffect(() => {
+    let filteredPositions = [...allPositions];
+
+    // Apply year filter
+    if (yearFilter !== 'All') {
+      filteredPositions = filteredPositions.filter((position) =>
+        position.expiration.startsWith(yearFilter)
+      );
+    }
+
+    // Apply symbol filter
+    if (symbolFilter !== 'All') {
+      filteredPositions = filteredPositions.filter((position) =>
+        position.ticker === symbolFilter
+      );
+    }
+
+    // Apply sorting
+    filteredPositions.sort((a, b) => {
+      const aValue = a[sortBy];
+      const bValue = b[sortBy];
+      
+      if (aValue === undefined || bValue === undefined) return 0;
+      
+      if (typeof aValue === 'string' && typeof bValue === 'string') {
+        const comparison = aValue.localeCompare(bValue);
+        return sortOrder === 'asc' ? comparison : -comparison;
+      }
+      
+      if (typeof aValue === 'number' && typeof bValue === 'number') {
+        const comparison = aValue - bValue;
+        return sortOrder === 'asc' ? comparison : -comparison;
+      }
+      
+      return 0;
+    });
+
+    setPositions(filteredPositions);
+  }, [allPositions, yearFilter, symbolFilter, sortBy, sortOrder]);
+
+  const handleSort = (field: keyof Position) => {
+    if (sortBy === field) {
+      setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortBy(field);
+      setSortOrder('asc');
+    }
+  };
+
+  const uniqueYears = React.useMemo(() => {
+    return Array.from(new Set(allPositions.map((p) => p.expiration.slice(0, 4)))).sort();
+  }, [allPositions]);
+  
+  const symbols = React.useMemo(() => {
+    return Array.from(new Set(allPositions.map((p) => p.ticker))).sort();
+  }, [allPositions]);
+
+  const handleRowExpand = (positionId: string) => {
+    const newExpandedRows = new Set(expandedRows);
+    if (newExpandedRows.has(positionId)) {
+      newExpandedRows.delete(positionId);
+    } else {
+      newExpandedRows.add(positionId);
+    }
+    setExpandedRows(newExpandedRows);
+  };
+
+  const getTradesForPosition = (position: Position): Trade[] => {
+    return allTrades.filter(trade => position.trades.includes(trade.id));
+  };
 
   if (loading) {
     return (
@@ -131,6 +225,7 @@ export default function Positions() {
       </Box>
     );
   }
+  
   return (
     <Box sx={{ width: "100%", maxWidth: { sm: "100%", md: "1700px" } }}>
       <Card variant="outlined">
@@ -139,58 +234,229 @@ export default function Positions() {
             Active Positions
           </Typography>
           
+          {/* Filtering Controls */}
+          <Grid container spacing={2} sx={{ mb: 3 }}>
+            <Grid item xs={12} sm={4}>
+              <FormControl fullWidth size="small">
+                <InputLabel>Filter by Year</InputLabel>
+                <Select
+                  value={yearFilter}
+                  label="Filter by Year"
+                  onChange={(e) => setYearFilter(e.target.value)}
+                >
+                  <MenuItem value="All">All Years</MenuItem>
+                  {uniqueYears.map((year) => (
+                    <MenuItem key={year} value={year}>
+                      {year}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            </Grid>
+            <Grid item xs={12} sm={4}>
+              <FormControl fullWidth size="small">
+                <InputLabel>Filter by Symbol</InputLabel>
+                <Select
+                  value={symbolFilter}
+                  label="Filter by Symbol"
+                  onChange={(e) => setSymbolFilter(e.target.value)}
+                >
+                  <MenuItem value="All">All Symbols</MenuItem>
+                  {symbols.map((symbol) => (
+                    <MenuItem key={symbol} value={symbol}>
+                      {symbol}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            </Grid>
+            <Grid item xs={12} sm={4}>
+              <Typography variant="body2" color="text.secondary" sx={{ pt: 1 }}>
+                Showing {positions.length} of {allPositions.length} positions
+              </Typography>
+            </Grid>
+          </Grid>
+          
           <TableContainer component={Paper} variant="outlined">
             <Table sx={{ minWidth: 650 }} aria-label="active positions table">
               <TableHead>
                 <TableRow>
-                  <TableCell>Ticker</TableCell>
-                  <TableCell>Strategy</TableCell>
-                  <TableCell>Strike</TableCell>
-                  <TableCell>Expiration</TableCell>
-                  <TableCell>Open Date</TableCell>
-                  <TableCell>Quantity</TableCell>
+                  <TableCell width={50}></TableCell>
+                  <TableCell>
+                    <TableSortLabel
+                      active={sortBy === 'ticker'}
+                      direction={sortBy === 'ticker' ? sortOrder : 'asc'}
+                      onClick={() => handleSort('ticker')}
+                    >
+                      Ticker
+                    </TableSortLabel>
+                  </TableCell>
+                  <TableCell>
+                    <TableSortLabel
+                      active={sortBy === 'type'}
+                      direction={sortBy === 'type' ? sortOrder : 'asc'}
+                      onClick={() => handleSort('type')}
+                    >
+                      Strategy
+                    </TableSortLabel>
+                  </TableCell>
+                  <TableCell>
+                    <TableSortLabel
+                      active={sortBy === 'strike'}
+                      direction={sortBy === 'strike' ? sortOrder : 'asc'}
+                      onClick={() => handleSort('strike')}
+                    >
+                      Strike
+                    </TableSortLabel>
+                  </TableCell>
+                  <TableCell>
+                    <TableSortLabel
+                      active={sortBy === 'expiration'}
+                      direction={sortBy === 'expiration' ? sortOrder : 'asc'}
+                      onClick={() => handleSort('expiration')}
+                    >
+                      Expiration
+                    </TableSortLabel>
+                  </TableCell>
+                  <TableCell>
+                    <TableSortLabel
+                      active={sortBy === 'openDate'}
+                      direction={sortBy === 'openDate' ? sortOrder : 'asc'}
+                      onClick={() => handleSort('openDate')}
+                    >
+                      Open Date
+                    </TableSortLabel>
+                  </TableCell>
+                  <TableCell>
+                    <TableSortLabel
+                      active={sortBy === 'currentQuantity'}
+                      direction={sortBy === 'currentQuantity' ? sortOrder : 'asc'}
+                      onClick={() => handleSort('currentQuantity')}
+                    >
+                      Quantity
+                    </TableSortLabel>
+                  </TableCell>
                   <TableCell align="right">P/L</TableCell>
-                  <TableCell>Status</TableCell>
+                  <TableCell>
+                    <TableSortLabel
+                      active={sortBy === 'status'}
+                      direction={sortBy === 'status' ? sortOrder : 'asc'}
+                      onClick={() => handleSort('status')}
+                    >
+                      Status
+                    </TableSortLabel>
+                  </TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
-                {positions.map((position) => (
-                  <TableRow key={position.id}>
-                    <TableCell>
-                      <Typography fontWeight="medium">{position.ticker}</Typography>
-                    </TableCell>
-                    <TableCell>{position.type}</TableCell>
-                    <TableCell>${position.strike ?? 'N/A'}</TableCell>
-                    <TableCell>{position.expiration || 'N/A'}</TableCell>
-                    <TableCell>{position.openDate || 'N/A'}</TableCell>
-                    <TableCell>{position.currentQuantity ?? 'N/A'}</TableCell>
-                    <TableCell align="right">
-                      <Typography
-                        fontWeight="medium"
-                        color={(position.totalSalesBookCost - position.totalPurchasesBookCost) >= 0 ? "success.main" : "error.main"}
-                      >
-                        {(position.totalSalesBookCost - position.totalPurchasesBookCost) >= 0 ? "+" : ""}${(position.totalSalesBookCost - position.totalPurchasesBookCost).toFixed(2)}
-                      </Typography>
-                    </TableCell>
-                    <TableCell>
-                      <Chip
-                        label={position.status}
-                        size="small"
-                        color={
-                          position.status === "Open" 
-                            ? "primary" 
-                            : position.status === "Expired" 
-                            ? "warning" 
-                            : "default"
-                        }
-                        sx={{
-                          backgroundColor: position.status === "Expired" ? "warning.light" : undefined,
-                          color: position.status === "Expired" ? "warning.contrastText" : undefined,
-                        }}
-                      />
-                    </TableCell>
-                  </TableRow>
-                ))}
+                {positions.map((position) => {
+                  const positionTrades = getTradesForPosition(position);
+                  const isExpanded = expandedRows.has(position.id);
+                  const hasMultipleTrades = positionTrades.length > 1;
+                  
+                  return (
+                    <React.Fragment key={position.id}>
+                      <TableRow>
+                        <TableCell>
+                          {hasMultipleTrades ? (
+                            <IconButton
+                              size="small"
+                              onClick={() => handleRowExpand(position.id)}
+                              aria-label={isExpanded ? "Collapse trades" : "Expand trades"}
+                            >
+                              {isExpanded ? <ExpandLessIcon /> : <ExpandMoreIcon />}
+                            </IconButton>
+                          ) : null}
+                        </TableCell>
+                        <TableCell>
+                          <Typography fontWeight="medium">{position.ticker}</Typography>
+                        </TableCell>
+                        <TableCell>{position.type}</TableCell>
+                        <TableCell>${position.strike ?? 'N/A'}</TableCell>
+                        <TableCell>{position.expiration || 'N/A'}</TableCell>
+                        <TableCell>{position.openDate || 'N/A'}</TableCell>
+                        <TableCell>{position.currentQuantity ?? 'N/A'}</TableCell>
+                        <TableCell align="right">
+                          <Typography
+                            fontWeight="medium"
+                            color={(position.totalSalesBookCost - position.totalPurchasesBookCost) >= 0 ? "success.main" : "error.main"}
+                          >
+                            {(position.totalSalesBookCost - position.totalPurchasesBookCost) >= 0 ? "+" : ""}${(position.totalSalesBookCost - position.totalPurchasesBookCost).toFixed(2)}
+                          </Typography>
+                        </TableCell>
+                        <TableCell>
+                          <Chip
+                            label={position.status}
+                            size="small"
+                            color={
+                              position.status === "Open" 
+                                ? "primary" 
+                                : position.status === "Expired" 
+                                ? "warning" 
+                                : "default"
+                            }
+                            sx={{
+                              backgroundColor: position.status === "Expired" ? "warning.light" : undefined,
+                              color: position.status === "Expired" ? "warning.contrastText" : undefined,
+                            }}
+                          />
+                        </TableCell>
+                      </TableRow>
+                      
+                      {/* Expandable trade details row */}
+                      {hasMultipleTrades && (
+                        <TableRow>
+                          <TableCell style={{ paddingBottom: 0, paddingTop: 0 }} colSpan={9}>
+                            <Collapse in={isExpanded} timeout="auto" unmountOnExit>
+                              <Box sx={{ margin: 1 }}>
+                                <Typography variant="h6" gutterBottom component="div">
+                                  Trade Details ({positionTrades.length} trades)
+                                </Typography>
+                                <Table size="small" aria-label="trade details">
+                                  <TableHead>
+                                    <TableRow>
+                                      <TableCell>Date</TableCell>
+                                      <TableCell>Type</TableCell>
+                                      <TableCell>Quantity</TableCell>
+                                      <TableCell>Premium</TableCell>
+                                      <TableCell>Book Cost</TableCell>
+                                      <TableCell>Status</TableCell>
+                                    </TableRow>
+                                  </TableHead>
+                                  <TableBody>
+                                    {positionTrades.map((trade) => (
+                                      <TableRow key={trade.id}>
+                                        <TableCell>{trade.Transaction_Date}</TableCell>
+                                        <TableCell>
+                                          <Typography
+                                            variant="body2"
+                                            color={trade.tradeType === 'sell' ? 'success.main' : trade.tradeType === 'buy' ? 'error.main' : 'text.primary'}
+                                          >
+                                            {trade.tradeType.toUpperCase()}
+                                          </Typography>
+                                        </TableCell>
+                                        <TableCell>{trade.Quantity}</TableCell>
+                                        <TableCell>${trade.PremiumValue.toFixed(2)}</TableCell>
+                                        <TableCell>${trade.Book_Cost.toFixed(2)}</TableCell>
+                                        <TableCell>
+                                          <Chip
+                                            label={trade.status}
+                                            size="small"
+                                            variant="outlined"
+                                          />
+                                        </TableCell>
+                                      </TableRow>
+                                    ))}
+                                  </TableBody>
+                                </Table>
+                              </Box>
+                            </Collapse>
+                          </TableCell>
+                        </TableRow>
+                      )}
+                    </React.Fragment>
+                  );
+                })}
               </TableBody>
             </Table>
           </TableContainer>

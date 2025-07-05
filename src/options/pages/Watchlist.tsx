@@ -1,257 +1,232 @@
+import React, { useEffect, useState } from 'react';
 import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
 import Grid from "@mui/material/Grid";
-import Table from "@mui/material/Table";
-import TableBody from "@mui/material/TableBody";
-import TableCell from "@mui/material/TableCell";
-import TableContainer from "@mui/material/TableContainer";
-import TableHead from "@mui/material/TableHead";
-import TableRow from "@mui/material/TableRow";
 import Paper from "@mui/material/Paper";
 import Button from "@mui/material/Button";
+import Card from "@mui/material/Card";
+import CardContent from "@mui/material/CardContent";
+import FormControl from "@mui/material/FormControl";
+import InputLabel from "@mui/material/InputLabel";
+import Select from "@mui/material/Select";
+import MenuItem from "@mui/material/MenuItem";
+import Switch from "@mui/material/Switch";
+import FormControlLabel from "@mui/material/FormControlLabel";
 import AddRoundedIcon from "@mui/icons-material/AddRounded";
-import SearchIcon from "@mui/icons-material/Search";
-import InputBase from "@mui/material/InputBase";
-import { alpha, styled } from "@mui/material/styles";
+import TradingViewWatchlist, { TradingViewSymbol, TradingViewSymbolGroup } from '../../components/TradingViewWatchlist';
+import { xanoApi } from '../../services/xanoApi';
+import { stockApi } from '../../services/stockApi';
+import { Trade } from '../models/types';
 
-// Styled search input
-const Search = styled("div")(({ theme }) => ({
-  position: "relative",
-  borderRadius: theme.shape.borderRadius,
-  backgroundColor: alpha(theme.palette.common.white, 0.15),
-  "&:hover": {
-    backgroundColor: alpha(theme.palette.common.white, 0.25),
-  },
-  marginLeft: 0,
-  width: "100%",
-  [theme.breakpoints.up("sm")]: {
-    marginLeft: theme.spacing(1),
-    width: "auto",
-  },
-  border: `1px solid ${theme.palette.divider}`,
-}));
-
-const SearchIconWrapper = styled("div")(({ theme }) => ({
-  padding: theme.spacing(0, 2),
-  height: "100%",
-  position: "absolute",
-  pointerEvents: "none",
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-}));
-
-const StyledInputBase = styled(InputBase)(({ theme }) => ({
-  color: "inherit",
-  width: "100%",
-  "& .MuiInputBase-input": {
-    padding: theme.spacing(1, 1, 1, 0),
-    // vertical padding + font size from searchIcon
-    paddingLeft: `calc(1em + ${theme.spacing(4)})`,
-    transition: theme.transitions.create("width"),
-    width: "100%",
-    [theme.breakpoints.up("sm")]: {
-      width: "12ch",
-      "&:focus": {
-        width: "20ch",
-      },
-    },
-  },
-}));
-
-// Sample watchlist data
-const watchlistData = [
-  {
-    id: 1,
-    ticker: "AAPL",
-    name: "Apple Inc.",
-    price: 215.75,
-    change: 2.45,
-    changePercent: 1.15,
-    ivPercentile: 65,
-    volume: 32500000,
-    averageVolume: 45000000,
-    openInterestCalls: 1250000,
-    openInterestPuts: 980000,
-  },
-  {
-    id: 2,
-    ticker: "MSFT",
-    name: "Microsoft Corp.",
-    price: 394.28,
-    change: -1.35,
-    changePercent: -0.34,
-    ivPercentile: 72,
-    volume: 22000000,
-    averageVolume: 28000000,
-    openInterestCalls: 880000,
-    openInterestPuts: 750000,
-  },
-  {
-    id: 3,
-    ticker: "TSLA",
-    name: "Tesla, Inc.",
-    price: 238.65,
-    change: 5.78,
-    changePercent: 2.48,
-    ivPercentile: 85,
-    volume: 58000000,
-    averageVolume: 62000000,
-    openInterestCalls: 2200000,
-    openInterestPuts: 1950000,
-  },
-  {
-    id: 4,
-    ticker: "NVDA",
-    name: "NVIDIA Corp.",
-    price: 122.35,
-    change: 3.15,
-    changePercent: 2.64,
-    ivPercentile: 78,
-    volume: 45000000,
-    averageVolume: 42000000,
-    openInterestCalls: 1650000,
-    openInterestPuts: 1420000,
-  },
-  {
-    id: 5,
-    ticker: "AMZN",
-    name: "Amazon.com Inc.",
-    price: 177.45,
-    change: -0.85,
-    changePercent: -0.48,
-    ivPercentile: 58,
-    volume: 35000000,
-    averageVolume: 38000000,
-    openInterestCalls: 980000,
-    openInterestPuts: 820000,
-  },
-  {
-    id: 6,
-    ticker: "META",
-    name: "Meta Platforms Inc.",
-    price: 486.20,
-    change: 2.35,
-    changePercent: 0.49,
-    ivPercentile: 62,
-    volume: 18000000,
-    averageVolume: 22000000,
-    openInterestCalls: 750000,
-    openInterestPuts: 680000,
-  },
-  {
-    id: 7,
-    ticker: "GOOGL",
-    name: "Alphabet Inc.",
-    price: 174.85,
-    change: 0.65,
-    changePercent: 0.37,
-    ivPercentile: 54,
-    volume: 25000000,
-    averageVolume: 28000000,
-    openInterestCalls: 820000,
-    openInterestPuts: 750000,
-  },
-];
+// Default watchlist symbols (raw symbols - will be converted to proper market format)
+const defaultWatchlistRawSymbols = ['AAPL', 'MSFT', 'TSLA', 'NVDA', 'AMZN', 'META', 'GOOGL'];
 
 export default function Watchlist() {
+  const [tradedStocks, setTradedStocks] = useState<string[]>([]);
+  const [defaultSymbols, setDefaultSymbols] = useState<TradingViewSymbol[]>([]);
+  const [tradedSymbols, setTradedSymbols] = useState<TradingViewSymbol[]>([]);
+  const [includeTradedStocks, setIncludeTradedStocks] = useState<boolean>(true);
+  const [watchlistTheme, setWatchlistTheme] = useState<'light' | 'dark'>('dark');
+  const [loading, setLoading] = useState<boolean>(true);
+  const [symbolsLoading, setSymbolsLoading] = useState<boolean>(false);
+
+  // Fetch and convert default symbols to proper TradingView format from cache
+  useEffect(() => {
+    const convertDefaultSymbols = async () => {
+      setSymbolsLoading(true);
+      try {
+        console.log('💾 Loading default symbols from Xano cache...');
+        const { found, missing } = await xanoApi.getTradingViewSymbolsFromCache(defaultWatchlistRawSymbols);
+        
+        if (found.length > 0) {
+          setDefaultSymbols(found);
+          console.log('✅ Default symbols loaded from cache:', found.length, 'found');
+        }
+        
+        if (missing.length > 0) {
+          console.log('⚠️ Missing from cache, falling back to API for:', missing);
+          // Fallback to API for missing symbols
+          try {
+            const apiSymbols = await stockApi.getTradingViewSymbols(missing);
+            setDefaultSymbols(prev => [...prev, ...apiSymbols]);
+            console.log('✅ Missing symbols fetched from API:', apiSymbols.length);
+          } catch (apiError) {
+            console.error('API fallback failed:', apiError);
+            // Ultimate fallback: use NASDAQ prefix
+            const fallbackSymbols = missing.map(symbol => ({
+              name: `NASDAQ:${symbol}`,
+              displayName: symbol
+            }));
+            setDefaultSymbols(prev => [...prev, ...fallbackSymbols]);
+          }
+        }
+      } catch (err) {
+        console.error('Failed to load symbols from cache:', err);
+        // Fallback to NASDAQ prefix for all
+        const fallbackSymbols = defaultWatchlistRawSymbols.map(symbol => ({
+          name: `NASDAQ:${symbol}`,
+          displayName: symbol
+        }));
+        setDefaultSymbols(fallbackSymbols);
+      } finally {
+        setSymbolsLoading(false);
+      }
+    };
+
+    convertDefaultSymbols();
+  }, []);
+
+  // Fetch traded stocks from your Xano data and convert to TradingView format
+  useEffect(() => {
+    const fetchTradedStocks = async () => {
+      try {
+        setLoading(true);
+        const data = await xanoApi.getTransactions();
+        const trades = data as Trade[];
+        
+        // Extract unique stock symbols from trades
+        const uniqueSymbols = Array.from(
+          new Set(trades.map((trade: Trade) => trade.Symbol).filter(Boolean))
+        ).sort();
+        
+        console.log('📈 Found traded stocks:', uniqueSymbols);
+        setTradedStocks(uniqueSymbols);
+        
+        // Convert traded symbols to proper TradingView format using cache first
+        if (uniqueSymbols.length > 0) {
+          setSymbolsLoading(true);
+          console.log('💾 Loading traded symbols from Xano cache...');
+          
+          const { found, missing } = await xanoApi.getTradingViewSymbolsFromCache(uniqueSymbols);
+          
+          if (found.length > 0) {
+            setTradedSymbols(found);
+            console.log('✅ Traded symbols loaded from cache:', found.length, 'found');
+          }
+          
+          if (missing.length > 0) {
+            console.log('⚠️ Missing traded symbols from cache, falling back to API for:', missing);
+            try {
+              const apiSymbols = await stockApi.getTradingViewSymbols(missing);
+              setTradedSymbols(prev => [...prev, ...apiSymbols]);
+              console.log('✅ Missing traded symbols fetched from API:', apiSymbols.length);
+            } catch (apiError) {
+              console.error('API fallback failed for traded symbols:', apiError);
+              // Fallback: use NASDAQ prefix for missing symbols
+              const fallbackSymbols = missing.map(symbol => ({
+                name: `NASDAQ:${symbol}`,
+                displayName: symbol
+              }));
+              setTradedSymbols(prev => [...prev, ...fallbackSymbols]);
+            }
+          }
+        }
+      } catch (err) {
+        console.error('Failed to fetch traded stocks:', err);
+      } finally {
+        setLoading(false);
+        setSymbolsLoading(false);
+      }
+    };
+
+    fetchTradedStocks();
+  }, []);
+
+  // Create symbol groups based on user preferences
+  const createSymbolGroups = (): TradingViewSymbolGroup[] => {
+    const groups: TradingViewSymbolGroup[] = [];
+
+    // Add default watchlist with converted symbols
+    if (defaultSymbols.length > 0) {
+      groups.push({
+        name: "Market Leaders",
+        symbols: defaultSymbols
+      });
+    }
+
+    // Add traded stocks if enabled and converted
+    if (includeTradedStocks && tradedSymbols.length > 0) {
+      groups.push({
+        name: "My Traded Stocks",
+        symbols: tradedSymbols
+      });
+    }
+
+    return groups;
+  };
+
+  const symbolGroups = createSymbolGroups();
+
+  if (loading || symbolsLoading) {
+    return (
+      <Box sx={{ width: "100%", maxWidth: { sm: "100%", md: "1700px" }, display: "flex", justifyContent: "center", alignItems: "center", height: "50vh" }}>
+        <Typography>Loading watchlist...</Typography>
+      </Box>
+    );
+  }
+
   return (
     <Box sx={{ width: "100%", maxWidth: { sm: "100%", md: "1700px" } }}>
       <Grid container spacing={3}>
         <Grid size={{ xs: 12 }}>
-          <Box sx={{ display: "flex", justifyContent: "space-between", mb: 2 }}>
+          <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 3 }}>
             <Typography variant="h5" component="h2">
               Market Watchlist
             </Typography>
-            <Box sx={{ display: "flex", gap: 2 }}>
-              <Search>
-                <SearchIconWrapper>
-                  <SearchIcon />
-                </SearchIconWrapper>
-                <StyledInputBase
-                  placeholder="Search…"
-                  inputProps={{ "aria-label": "search" }}
-                />
-              </Search>
-              <Button
-                variant="contained"
-                startIcon={<AddRoundedIcon />}
-              >
-                Add Symbol
-              </Button>
+            <Box sx={{ display: "flex", gap: 2, alignItems: "center" }}>
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={watchlistTheme === 'dark'}
+                    onChange={() => setWatchlistTheme(watchlistTheme === 'dark' ? 'light' : 'dark')}
+                  />
+                }
+                label="Dark Theme"
+              />
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={includeTradedStocks}
+                    onChange={() => setIncludeTradedStocks(!includeTradedStocks)}
+                  />
+                }
+                label="Include My Stocks"
+              />
             </Box>
           </Box>
           
-          <TableContainer component={Paper} variant="outlined">
-            <Table sx={{ minWidth: 650 }} aria-label="watchlist table">
-              <TableHead>
-                <TableRow>
-                  <TableCell>Ticker</TableCell>
-                  <TableCell>Price</TableCell>
-                  <TableCell>Change</TableCell>
-                  <TableCell>IV Percentile</TableCell>
-                  <TableCell>Volume</TableCell>
-                  <TableCell>Options Volume</TableCell>
-                  <TableCell>Put/Call Ratio</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {watchlistData.map((stock) => (
-                  <TableRow
-                    key={stock.id}
-                    hover
-                    sx={{ cursor: "pointer" }}
-                  >
-                    <TableCell component="th" scope="row">
-                      <Typography fontWeight="medium">{stock.ticker}</Typography>
-                      <Typography variant="caption" color="text.secondary">
-                        {stock.name}
-                      </Typography>
-                    </TableCell>
-                    <TableCell>
-                      <Typography fontWeight="medium">
-                        ${stock.price.toFixed(2)}
-                      </Typography>
-                    </TableCell>
-                    <TableCell>
-                      <Typography
-                        fontWeight="medium"
-                        color={stock.change >= 0 ? "success.main" : "error.main"}
-                      >
-                        {stock.change >= 0 ? "+" : ""}
-                        {stock.change.toFixed(2)} (
-                        {stock.change >= 0 ? "+" : ""}
-                        {stock.changePercent.toFixed(2)}%)
-                      </Typography>
-                    </TableCell>
-                    <TableCell>
-                      <Typography
-                        fontWeight="medium"
-                        color={
-                          stock.ivPercentile > 70
-                            ? "error.main"
-                            : stock.ivPercentile > 50
-                            ? "warning.main"
-                            : "success.main"
-                        }
-                      >
-                        {stock.ivPercentile}%
-                      </Typography>
-                    </TableCell>
-                    <TableCell>
-                      {(stock.volume / 1000000).toFixed(1)}M / {(stock.averageVolume / 1000000).toFixed(1)}M
-                    </TableCell>
-                    <TableCell>
-                      {((stock.openInterestCalls + stock.openInterestPuts) / 1000000).toFixed(2)}M
-                    </TableCell>
-                    <TableCell>
-                      {(stock.openInterestPuts / stock.openInterestCalls).toFixed(2)}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </TableContainer>
+          {/* Display traded stocks info */}
+          {tradedStocks.length > 0 && (
+            <Box sx={{ mb: 2, p: 2, bgcolor: 'info.light', borderRadius: 1, opacity: 0.8 }}>
+              <Typography variant="body2" color="info.contrastText" sx={{ mb: 1 }}>
+                📊 Found {tradedStocks.length} stocks from your trades
+              </Typography>
+              <Typography variant="caption" color="info.contrastText">
+                ✅ Converted {tradedSymbols.length} symbols with proper market prefixes: {tradedSymbols.slice(0, 3).map(s => s.name).join(', ')}
+                {tradedSymbols.length > 3 && ` and ${tradedSymbols.length - 3} more...`}
+              </Typography>
+            </Box>
+          )}
+          
+          {/* Display symbol loading status */}
+          {symbolsLoading && (
+            <Box sx={{ mb: 2, p: 2, bgcolor: 'warning.light', borderRadius: 1 }}>
+              <Typography variant="body2" color="warning.contrastText">
+                🔍 Looking up correct market exchanges for symbols...
+              </Typography>
+            </Box>
+          )}
+          
+          {/* TradingView Watchlist Widget */}
+          <Paper sx={{ p: 0, overflow: 'hidden' }}>
+            <TradingViewWatchlist
+              symbolsGroups={symbolGroups}
+              colorTheme={watchlistTheme}
+              height={700}
+              isTransparent={false}
+              showSymbolLogo={true}
+            />
+          </Paper>
         </Grid>
       </Grid>
     </Box>
