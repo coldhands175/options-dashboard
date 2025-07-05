@@ -11,7 +11,7 @@ export interface SymbolConfig {
 
 // Default symbols used across the application
 // These symbols will be used in both the navbar ticker and watchlist
-// Sorted alphabetically by symbol for better organization
+// Sorted alphabetically by symbol for better organization (A-Z)
 export const DEFAULT_SYMBOLS: SymbolConfig[] = [
   { symbol: "AAPL", proName: "NASDAQ:AAPL", title: "Apple Inc." },
   { symbol: "AMZN", proName: "NASDAQ:AMZN", title: "Amazon" },
