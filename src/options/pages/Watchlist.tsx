@@ -137,19 +137,25 @@ export default function Watchlist() {
   const createSymbolGroups = (): TradingViewSymbolGroup[] => {
     const groups: TradingViewSymbolGroup[] = [];
 
-    // Add default watchlist with converted symbols
+    // Add default watchlist with converted symbols (sorted alphabetically)
     if (defaultSymbols.length > 0) {
+      const sortedDefaultSymbols = [...defaultSymbols].sort((a, b) => 
+        a.displayName.localeCompare(b.displayName)
+      );
       groups.push({
         name: "Market Leaders",
-        symbols: defaultSymbols
+        symbols: sortedDefaultSymbols
       });
     }
 
-    // Add traded stocks if enabled and converted
+    // Add traded stocks if enabled and converted (sorted alphabetically)
     if (includeTradedStocks && tradedSymbols.length > 0) {
+      const sortedTradedSymbols = [...tradedSymbols].sort((a, b) => 
+        a.displayName.localeCompare(b.displayName)
+      );
       groups.push({
         name: "My Traded Stocks",
-        symbols: tradedSymbols
+        symbols: sortedTradedSymbols
       });
     }
 

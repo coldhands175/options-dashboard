@@ -11,19 +11,20 @@ export interface SymbolConfig {
 
 // Default symbols used across the application
 // These symbols will be used in both the navbar ticker and watchlist
+// Sorted alphabetically by symbol for better organization
 export const DEFAULT_SYMBOLS: SymbolConfig[] = [
+  { symbol: "AAPL", proName: "NASDAQ:AAPL", title: "Apple Inc." },
+  { symbol: "AMZN", proName: "NASDAQ:AMZN", title: "Amazon" },
   { symbol: "BBAI", proName: "NYSE:BBAI", title: "Big Bear AI" },
+  { symbol: "GOOGL", proName: "NASDAQ:GOOGL", title: "Alphabet" },
+  { symbol: "LNG", proName: "NYSE:LNG", title: "Cheniere" },
+  { symbol: "META", proName: "NASDAQ:META", title: "Meta" },
   { symbol: "MSFT", proName: "NASDAQ:MSFT", title: "Microsoft" },
   { symbol: "MSTR", proName: "NASDAQ:MSTR", title: "Microstrategy" },
   { symbol: "NVDA", proName: "NASDAQ:NVDA", title: "Nvidia" },
   { symbol: "PLTR", proName: "NASDAQ:PLTR", title: "Palantir" },
-  { symbol: "LNG", proName: "NYSE:LNG", title: "Cheniere" },
   { symbol: "SYM", proName: "NASDAQ:SYM", title: "Symbotic" },
-  { symbol: "AAPL", proName: "NASDAQ:AAPL", title: "Apple Inc." },
-  { symbol: "TSLA", proName: "NASDAQ:TSLA", title: "Tesla" },
-  { symbol: "AMZN", proName: "NASDAQ:AMZN", title: "Amazon" },
-  { symbol: "META", proName: "NASDAQ:META", title: "Meta" },
-  { symbol: "GOOGL", proName: "NASDAQ:GOOGL", title: "Alphabet" }
+  { symbol: "TSLA", proName: "NASDAQ:TSLA", title: "Tesla" }
 ];
 
 // Extract just the raw symbols for APIs that need them
