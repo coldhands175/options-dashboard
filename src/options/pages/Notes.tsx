@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { Navigate } from 'react-router-dom';
 import {
   Box,
   Button,
@@ -23,6 +24,7 @@ import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Placeholder from '@tiptap/extension-placeholder';
 import { memApiService } from '../../services/memApi';
+import { useAuth } from '../../hooks/useAuth';
 import '../../tiptap.css';
 
 interface TradeNote {
@@ -34,10 +36,18 @@ interface TradeNote {
 }
 
 export default function Notes() {
+  const { isAdmin, checkAdminAccess } = useAuth();
+  
+  // State hooks must be called before any conditional returns
   const [savedNotes, setSavedNotes] = useState<TradeNote[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  
+  // Redirect non-admin users to dashboard
+  if (!isAdmin) {
+    return <Navigate to="/" replace />;
+  }
 
   const editor = useEditor({
     extensions: [
@@ -124,6 +134,13 @@ export default function Notes() {
 
   const handleSaveNote = async () => {
     if (!editor) return;
+    
+    try {
+      checkAdminAccess();
+    } catch (error: any) {
+      setError(error.message);
+      return;
+    }
     
     const content = editor.getText().trim();
     if (!content) {
@@ -231,6 +248,7 @@ export default function Notes() {
                     variant="outlined"
                     startIcon={<TrendingUpIcon />}
                     onClick={() => insertTemplate('long')}
+                    disabled={!isAdmin}
                   >
                     Long Position
                   </Button>
@@ -239,6 +257,7 @@ export default function Notes() {
                     variant="outlined"
                     startIcon={<TrendingDownIcon />}
                     onClick={() => insertTemplate('short')}
+                    disabled={!isAdmin}
                   >
                     Short Position
                   </Button>
@@ -247,6 +266,7 @@ export default function Notes() {
                     variant="outlined"
                     startIcon={<TimelineIcon />}
                     onClick={() => insertTemplate('analysis')}
+                    disabled={!isAdmin}
                   >
                     Analysis
                   </Button>
@@ -255,6 +275,7 @@ export default function Notes() {
                     variant="outlined"
                     startIcon={<NoteIcon />}
                     onClick={() => insertTemplate('idea')}
+                    disabled={!isAdmin}
                   >
                     Trade Idea
                   </Button>
@@ -288,7 +309,7 @@ export default function Notes() {
                 <Button
                   variant="contained"
                   onClick={handleSaveNote}
-                  disabled={loading}
+                  disabled={loading || !isAdmin}
                   startIcon={loading ? <CircularProgress size={16} /> : <SaveIcon />}
                 >
                   Save to Mem
