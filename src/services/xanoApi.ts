@@ -166,6 +166,10 @@ export const xanoApi = {
     return response.json();
   },
 
+  async getTransactionDocuments() {
+    return xanoRequest('/transaction_documents');
+  },
+
   // Add other API endpoints as needed
   async createTransaction(transactionData: any) {
     return xanoRequest('/transactions', {

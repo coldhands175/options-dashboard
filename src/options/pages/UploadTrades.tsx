@@ -44,17 +44,52 @@ export default function UploadTrades() {
     setPdfUploadError(null);
     setPdfUploadSuccess(false);
 
-    const formData = new FormData();
-    selectedFiles.forEach((file) => {
-      formData.append("content", file); // Append each file with the key 'content'
-    });
-
-
     try {
-      const result = await xanoApi.uploadTransactionDocuments(formData);
-      console.log("PDF Upload successful:", result);
-      setPdfUploadSuccess(true);
-      setSelectedFiles([]); // Clear the selected files after successful upload
+      // Create FormData with all selected files
+      const formData = new FormData();
+      
+      // Append all files with the same key 'content' to create an array
+      selectedFiles.forEach((file, index) => {
+        formData.append('content', file);
+        console.log(`Added file ${index + 1}: ${file.name} (${file.size} bytes)`);
+      });
+
+      console.log(`Uploading ${selectedFiles.length} file(s). Xano will handle duplicate checking.`);
+      
+      // Try bulk upload first
+      try {
+        const result = await xanoApi.uploadTransactionDocuments(formData);
+        console.log("Upload successful:", result);
+        setPdfUploadSuccess(true);
+        setSelectedFiles([]);
+        
+      } catch (bulkError) {
+        console.warn('Bulk upload failed, trying individual uploads:', bulkError);
+        
+        // Fallback: Upload files individually
+        const results = [];
+        for (let i = 0; i < selectedFiles.length; i++) {
+          const file = selectedFiles[i];
+          console.log(`Uploading file ${i + 1}/${selectedFiles.length}: ${file.name}`);
+          
+          const individualFormData = new FormData();
+          individualFormData.append('content', file);
+          
+          const result = await xanoApi.uploadTransactionDocuments(individualFormData);
+          results.push(result);
+          console.log(`File ${i + 1} uploaded successfully`);
+          
+          // Small delay between uploads
+          if (i < selectedFiles.length - 1) {
+            await new Promise(resolve => setTimeout(resolve, 500));
+          }
+        }
+        
+        console.log(`All ${selectedFiles.length} files uploaded individually:`, results);
+        setPdfUploadSuccess(true);
+        setSelectedFiles([]);
+      }
+      
     } catch (error) {
       console.error("Error during PDF upload:", error);
       if (error instanceof XanoApiError && error.code === 'RATE_LIMITED') {
