@@ -252,5 +252,98 @@ export const xanoApi = {
     // }, false); // false = no auth required
     
     return { success: true, message: 'Password reset successful' };
+  },
+
+  // Symbol mappings management - Using hardcoded data for now
+  // TODO: Create proper API endpoints in Xano for symbol_mappings table
+  async getSymbolMappings() {
+    // Hardcoded data based on what we populated via MCP
+    return [
+      { symbol: 'AAPL', tradingview_symbol: 'NASDAQ:AAPL', display_name: 'Apple Inc.', is_active: true },
+      { symbol: 'MSFT', tradingview_symbol: 'NASDAQ:MSFT', display_name: 'Microsoft Corp.', is_active: true },
+      { symbol: 'TSLA', tradingview_symbol: 'NASDAQ:TSLA', display_name: 'Tesla Inc.', is_active: true },
+      { symbol: 'NVDA', tradingview_symbol: 'NASDAQ:NVDA', display_name: 'NVIDIA Corp.', is_active: true },
+      { symbol: 'AMZN', tradingview_symbol: 'NASDAQ:AMZN', display_name: 'Amazon.com Inc.', is_active: true },
+      { symbol: 'META', tradingview_symbol: 'NASDAQ:META', display_name: 'Meta Platforms Inc.', is_active: true },
+      { symbol: 'GOOGL', tradingview_symbol: 'NASDAQ:GOOGL', display_name: 'Alphabet Inc.', is_active: true },
+      { symbol: 'CVS', tradingview_symbol: 'NYSE:CVS', display_name: 'CVS Health Corp.', is_active: true },
+      { symbol: 'DFS', tradingview_symbol: 'NYSE:DFS', display_name: 'Discover Financial Services', is_active: true },
+      { symbol: 'DIS', tradingview_symbol: 'NYSE:DIS', display_name: 'The Walt Disney Company', is_active: true },
+      { symbol: 'FISV', tradingview_symbol: 'NASDAQ:FISV', display_name: 'Fiserv Inc.', is_active: true },
+      { symbol: 'FIVE', tradingview_symbol: 'NASDAQ:FIVE', display_name: 'Five Below Inc.', is_active: true },
+      { symbol: 'GILD', tradingview_symbol: 'NASDAQ:GILD', display_name: 'Gilead Sciences Inc.', is_active: true },
+      { symbol: 'INTC', tradingview_symbol: 'NASDAQ:INTC', display_name: 'Intel Corp.', is_active: true },
+      { symbol: 'LNG', tradingview_symbol: 'NYSE:LNG', display_name: 'Cheniere Energy Inc.', is_active: true },
+      { symbol: 'BIG', tradingview_symbol: 'NYSE:BIG', display_name: 'Big Lots Inc.', is_active: false },
+      { symbol: 'CTL', tradingview_symbol: 'NYSE:CTL', display_name: 'CenturyLink Inc. (now Lumen)', is_active: false },
+      // Additional traded symbols to reduce API calls
+      { symbol: 'LVS', tradingview_symbol: 'NYSE:LVS', display_name: 'Las Vegas Sands Corp.', is_active: true },
+      { symbol: 'LZB', tradingview_symbol: 'NYSE:LZB', display_name: 'La-Z-Boy Inc.', is_active: true },
+      { symbol: 'PYPL', tradingview_symbol: 'NASDAQ:PYPL', display_name: 'PayPal Holdings Inc.', is_active: true },
+      { symbol: 'ROST', tradingview_symbol: 'NASDAQ:ROST', display_name: 'Ross Stores Inc.', is_active: true },
+      { symbol: 'SBUX', tradingview_symbol: 'NASDAQ:SBUX', display_name: 'Starbucks Corp.', is_active: true },
+      { symbol: 'SIRI', tradingview_symbol: 'NASDAQ:SIRI', display_name: 'Sirius XM Holdings Inc.', is_active: true },
+      { symbol: 'SRG', tradingview_symbol: 'NYSE:SRG', display_name: 'Seritage Growth Properties', is_active: true },
+      { symbol: 'STNE', tradingview_symbol: 'NASDAQ:STNE', display_name: 'StoneCo Ltd.', is_active: true },
+      { symbol: 'SYF', tradingview_symbol: 'NYSE:SYF', display_name: 'Synchrony Financial', is_active: true },
+      { symbol: 'TECK', tradingview_symbol: 'NYSE:TECK', display_name: 'Teck Resources Ltd.', is_active: true },
+      { symbol: 'TSM', tradingview_symbol: 'NYSE:TSM', display_name: 'Taiwan Semiconductor Manufacturing Co.', is_active: true },
+      { symbol: 'V', tradingview_symbol: 'NYSE:V', display_name: 'Visa Inc.', is_active: true },
+      { symbol: 'VLO', tradingview_symbol: 'NYSE:VLO', display_name: 'Valero Energy Corp.', is_active: true },
+      { symbol: 'WGO', tradingview_symbol: 'NYSE:WGO', display_name: 'Winnebago Industries Inc.', is_active: true },
+      { symbol: 'WSM', tradingview_symbol: 'NYSE:WSM', display_name: 'Williams-Sonoma Inc.', is_active: true },
+      { symbol: 'WYN', tradingview_symbol: 'NYSE:WYN', display_name: 'Wyndham Destinations Inc.', is_active: true },
+    ];
+  },
+
+  async getSymbolMapping(symbol: string) {
+    try {
+      const mappings = await this.getSymbolMappings();
+      return mappings.find((mapping: any) => mapping.symbol === symbol) || null;
+    } catch (error) {
+      console.error(`Failed to get symbol mapping for ${symbol}:`, error);
+      return null;
+    }
+  },
+
+  async getActiveSymbolMappings() {
+    try {
+      const mappings = await this.getSymbolMappings();
+      return mappings.filter((mapping: any) => mapping.is_active === true);
+    } catch (error) {
+      console.error('Failed to get active symbol mappings:', error);
+      return [];
+    }
+  },
+
+  async getTradingViewSymbolsFromCache(symbols: string[]) {
+    try {
+      const mappings = await this.getActiveSymbolMappings();
+      const symbolMap = new Map(mappings.map((m: any) => [m.symbol, m]));
+      
+      const results: { name: string; displayName: string }[] = [];
+      const missing: string[] = [];
+      
+      for (const symbol of symbols) {
+        const mapping = symbolMap.get(symbol);
+        if (mapping && mapping.tradingview_symbol) {
+          results.push({
+            name: mapping.tradingview_symbol,
+            displayName: mapping.display_name || symbol
+          });
+        } else {
+          missing.push(symbol);
+        }
+      }
+      
+      if (missing.length > 0) {
+        console.log(`📋 Missing symbol mappings for: ${missing.join(', ')}`);
+      }
+      
+      return { found: results, missing };
+    } catch (error) {
+      console.error('Failed to get TradingView symbols from cache:', error);
+      return { found: [], missing: symbols };
+    }
   }
 };
