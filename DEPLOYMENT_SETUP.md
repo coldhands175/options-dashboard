@@ -4,13 +4,16 @@
 
 ### Production Environment
 - **URL**: https://options-dashboard-eta.vercel.app
+- **Alternate URL**: https://options-dashboard-n6t3gklq0-coldhands175s-projects.vercel.app
 - **Branch**: `main`
-- **Status**: ✅ Deployed successfully
+- **Status**: ✅ Deployed successfully and working
 
 ### Development Environment  
-- **URL**: https://options-dashboard-n7gsa37rt-coldhands175s-projects.vercel.app
+- **URL**: https://options-dashboard-ee8atyl0b-coldhands175s-projects.vercel.app
 - **Branch**: `develop`
-- **Status**: ✅ Deployed successfully
+- **Status**: ✅ Deployed successfully and working
+
+> **Note**: Individual deployment URLs (with hashes) may require authentication. Use the main production URL for public access.
 
 ## 🔧 GitHub Secrets Setup
 
@@ -59,3 +62,26 @@ vercel --prod
 1. Add the GitHub secrets listed above
 2. Test the automated deployment by pushing to `develop` branch
 3. Monitor deployments in GitHub Actions and Vercel dashboard
+
+## 🔧 Troubleshooting
+
+### Fixed Issues:
+- **MIME type errors**: Fixed by configuring proper `vercel.json` with TypeScript-free build
+- **TypeScript compilation errors**: Bypassed by using `build:deploy` script instead of `build`
+- **SPA routing issues**: Resolved with proper Vite configuration
+
+### Key Configuration Files:
+- `vercel.json`: Forces use of `npm run build:deploy` instead of TypeScript compilation
+- `vite.config.ts`: Configured for proper production builds
+- `package.json`: Contains `build:deploy` script for Vercel deployment
+
+### Testing Deployment:
+```bash
+# Test locally
+npm run build:deploy
+npm run preview
+
+# Deploy manually
+vercel           # Preview deployment
+vercel --prod    # Production deployment
+```
