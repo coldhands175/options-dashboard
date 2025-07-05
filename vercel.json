@@ -1,17 +1,6 @@
 {
-  "builds": [
-    {
-      "src": "package.json",
-      "use": "@vercel/static-build",
-      "config": {
-        "buildCommand": "npm run build:deploy"
-      }
-    }
-  ],
-  "routes": [
-    {
-      "src": "/(.*)",
-      "dest": "/index.html"
-    }
-  ]
+  "framework": "vite",
+  "buildCommand": "npm run build:deploy",
+  "outputDirectory": "dist",
+  "installCommand": "npm ci"
 }
