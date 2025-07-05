@@ -28,12 +28,12 @@ const baseMenuItems = [
   { text: "Watchlist", icon: <StarRoundedIcon />, path: "/watchlist" },
   { text: "Trades", icon: <CompareArrowsRoundedIcon />, path: "/trades" },
   { text: "Analytics", icon: <InsightsRoundedIcon />, path: "/analytics" },
-  { text: "Notes", icon: <NoteIcon />, path: "/notes" },
 ];
 
 // Admin-only menu items
 const adminMenuItems = [
   { text: "Upload Trades", icon: <CloudUploadRoundedIcon />, path: "/upload-trades" },
+  { text: "Notes", icon: <NoteIcon />, path: "/notes" },
 ];
 
 // Settings item (available to all users)

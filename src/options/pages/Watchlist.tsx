@@ -17,9 +17,10 @@ import TradingViewWatchlist, { TradingViewSymbol, TradingViewSymbolGroup } from 
 import { xanoApi } from '../../services/xanoApi';
 import { stockApi } from '../../services/stockApi';
 import { Trade } from '../models/types';
+import { getRawSymbolsFromConfig } from '../../config/symbols';
 
-// Default watchlist symbols (raw symbols - will be converted to proper market format)
-const defaultWatchlistRawSymbols = ['AAPL', 'MSFT', 'TSLA', 'NVDA', 'AMZN', 'META', 'GOOGL'];
+// Default watchlist symbols from shared configuration
+const defaultWatchlistRawSymbols = getRawSymbolsFromConfig();
 
 export default function Watchlist() {
   const [tradedStocks, setTradedStocks] = useState<string[]>([]);
