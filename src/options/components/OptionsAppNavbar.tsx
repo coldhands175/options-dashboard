@@ -14,7 +14,7 @@ import MoreIcon from "@mui/icons-material/MoreVert";
 import SearchIcon from "@mui/icons-material/Search";
 import LogoutIcon from "@mui/icons-material/Logout";
 import InputBase from "@mui/material/InputBase";
-import { alpha, styled, useTheme } from "@mui/material/styles";
+import { alpha, styled } from "@mui/material/styles";
 import TradingViewWidget from "../../components/TradingViewWidget";
 import { useAuth } from "../../context/AuthContext";
 
@@ -59,7 +59,6 @@ const StyledInputBase = styled(InputBase)(({ theme }) => ({
 }));
 
 export default function OptionsAppNavbar() {
-  const theme = useTheme();
   const { user, logout } = useAuth();
   
   const [anchorEl, setAnchorEl] = React.useState<null | HTMLElement>(null);
@@ -258,30 +257,10 @@ export default function OptionsAppNavbar() {
                 : theme.palette.grey[200]
             }`,
             backgroundColor: (theme) =>
-              theme.palette.mode === 'dark' 
-                ? theme.palette.background.paper
-                : alpha(theme.palette.background.paper, 0.8),
-            // Force background for dark mode
-            ...(theme.palette.mode === 'dark' && {
-              background: `${theme.palette.background.paper} !important`,
-              '& *': {
-                backgroundColor: `${theme.palette.background.paper} !important`
-              }
-            }),
-            // Aggressively override TradingView widget backgrounds
-            '& .tradingview-widget-container': {
-              backgroundColor: 'transparent !important',
-            },
-            '& .tradingview-widget-container__widget': {
-              backgroundColor: 'transparent !important',
-            },
-            '& iframe': {
-              backgroundColor: 'transparent !important',
-            },
-            // Target the widget's internal styling
-            '& [data-widget-host="tradingview"]': {
-              backgroundColor: 'transparent !important',
-            }
+              alpha(theme.palette.background.default, 0.72),
+            backdropFilter: 'blur(6px)',
+            WebkitBackdropFilter: 'blur(6px)',
+            // Let TradingView widget handle its own background
           }}
         >
           <TradingViewWidget 

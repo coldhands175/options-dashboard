@@ -6,18 +6,19 @@ import { xanoApi, XanoApiError } from '../../services/xanoApi';
 import { useAuth } from '../../hooks/useAuth';
 
 export default function UploadTrades() {
-  const { isAdmin, user, checkAdminAccess } = useAuth();
+  const { isAdmin, checkAdminAccess } = useAuth();
   
-  // Redirect non-admin users to dashboard
-  if (!isAdmin) {
-    return <Navigate to="/" replace />;
-  }
-  
+  // State hooks must be called before any conditional returns
   const [naturalLanguageInput, setNaturalLanguageInput] = React.useState('');
   const [selectedFiles, setSelectedFiles] = React.useState<File[]>([]);
   const [isPdfUploading, setIsPdfUploading] = React.useState(false);
   const [pdfUploadError, setPdfUploadError] = React.useState<string | null>(null);
   const [pdfUploadSuccess, setPdfUploadSuccess] = React.useState(false);
+  
+  // Redirect non-admin users to dashboard
+  if (!isAdmin) {
+    return <Navigate to="/" replace />;
+  }
 
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;

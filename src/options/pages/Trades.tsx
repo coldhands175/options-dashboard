@@ -12,7 +12,6 @@ import TableHead from "@mui/material/TableHead";
 import TableRow from "@mui/material/TableRow";
 import TablePagination from "@mui/material/TablePagination";
 import Paper from "@mui/material/Paper";
-import Chip from "@mui/material/Chip";
 import FormControl from "@mui/material/FormControl";
 import InputLabel from "@mui/material/InputLabel";
 import Select, { SelectChangeEvent } from "@mui/material/Select";
@@ -79,14 +78,14 @@ export default function Trades() {
     return stabilizedThis.map((el) => el[0]);
   };
 
-  const getComparator = <Key extends keyof Trade>( 
+  const getComparator = React.useCallback(<Key extends keyof Trade>( 
     order: 'asc' | 'desc',
     orderBy: Key,
   ): (a: Trade, b: Trade) => number => {
     return order === 'desc'
       ? (a, b) => descendingComparator(a, b, orderBy)
       : (a, b) => -descendingComparator(a, b, orderBy);
-  };
+  }, []);
 
   const descendingComparator = <T, Key extends keyof T>(
     a: T,
@@ -126,7 +125,7 @@ export default function Trades() {
     }
 
     return stableSort(filtered, getComparator(order, orderBy));
-  }, [trades, statusFilter, symbolFilter, order, orderBy]);
+  }, [trades, statusFilter, symbolFilter, order, orderBy, getComparator]);
 
   const handleChangePage = (_event: unknown, newPage: number) => {
     setPage(newPage);
