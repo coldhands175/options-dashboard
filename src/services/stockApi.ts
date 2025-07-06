@@ -13,9 +13,13 @@ if (!POLYGON_API_KEY) {
 // Rate limiting: Simple in-memory cache to prevent excessive API calls
 class StockDataCache {
   private cache = new Map<string, { data: any; timestamp: number }>();
-  private readonly CACHE_DURATION = 60 * 1000; // 1 minute for real-time data
-  private readonly REQUEST_DELAY = 12000; // 12 seconds between requests (5 calls/minute = every 12 seconds)
+  private readonly CACHE_DURATION = 5 * 60 * 1000; // 5 minutes for company data
+  private readonly REQUEST_DELAY = 200; // 200ms between requests (free tier: 5 calls/minute, but we'll space them out)
   private lastRequestTime = 0;
+  private requestQueue: Array<() => Promise<void>> = [];
+  private isProcessingQueue = false;
+  private rateLimitedUntil = 0;
+  private consecutiveFailures = 0;
 
   async get(key: string): Promise<any | null> {
     const cached = this.cache.get(key);
@@ -32,17 +36,77 @@ class StockDataCache {
 
   async enforceRateLimit(): Promise<void> {
     const now = Date.now();
+    
+    // Check if we're in a rate-limited period
+    if (now < this.rateLimitedUntil) {
+      const waitTime = this.rateLimitedUntil - now;
+      console.log(`⏱️ Rate limited: waiting ${Math.round(waitTime/1000)}s`);
+      await new Promise(resolve => setTimeout(resolve, waitTime));
+    }
+    
     const timeSinceLastRequest = now - this.lastRequestTime;
     
     if (timeSinceLastRequest < this.REQUEST_DELAY) {
       const waitTime = this.REQUEST_DELAY - timeSinceLastRequest;
-      console.log(`⏱️ Rate limiting: waiting ${Math.round(waitTime/1000)}s before next API call`);
       await new Promise(resolve => 
         setTimeout(resolve, waitTime)
       );
     }
     
     this.lastRequestTime = Date.now();
+  }
+  
+  // Handle rate limit errors by setting a backoff period
+  handleRateLimit(): void {
+    this.consecutiveFailures++;
+    // More aggressive backoff: start with 2 minutes, max 15 minutes
+    const backoffTime = Math.min(120000 * Math.pow(2, this.consecutiveFailures - 1), 900000);
+    this.rateLimitedUntil = Date.now() + backoffTime;
+    console.log(`🚫 Rate limit hit. Backing off for ${Math.round(backoffTime/1000)}s (attempt ${this.consecutiveFailures})`);
+  }
+  
+  // Reset failure count on successful request
+  resetFailures(): void {
+    this.consecutiveFailures = 0;
+  }
+  
+  // Check if we're currently rate limited
+  isRateLimited(): boolean {
+    return Date.now() < this.rateLimitedUntil;
+  }
+
+  // Queue requests to avoid overwhelming the API
+  async queueRequest<T>(requestFn: () => Promise<T>): Promise<T> {
+    return new Promise((resolve, reject) => {
+      this.requestQueue.push(async () => {
+        try {
+          const result = await requestFn();
+          resolve(result);
+        } catch (error) {
+          reject(error);
+        }
+      });
+      
+      this.processQueue();
+    });
+  }
+
+  private async processQueue(): Promise<void> {
+    if (this.isProcessingQueue || this.requestQueue.length === 0) {
+      return;
+    }
+    
+    this.isProcessingQueue = true;
+    
+    while (this.requestQueue.length > 0) {
+      const request = this.requestQueue.shift();
+      if (request) {
+        await this.enforceRateLimit();
+        await request();
+      }
+    }
+    
+    this.isProcessingQueue = false;
   }
 }
 
@@ -80,32 +144,36 @@ async function polygonRequest(endpoint: string): Promise<any> {
     // Enforce rate limiting
     await stockCache.enforceRateLimit();
 
-    const url = `${POLYGON_BASE_URL}${endpoint}${endpoint.includes('?') ? '&' : '?'}apikey=${POLYGON_API_KEY}`;
-    console.log('📊 Fetching stock data from:', endpoint);
+    return await stockCache.queueRequest(async () => {
+      const url = `${POLYGON_BASE_URL}${endpoint}${endpoint.includes('?') ? '&' : '?'}apikey=${POLYGON_API_KEY}`;
+      console.log('📊 Fetching stock data from:', endpoint);
 
-    const response = await fetch(url);
+      const response = await fetch(url);
 
-    if (!response.ok) {
-      let message = `Polygon API Error: ${response.status} ${response.statusText}`;
-      let code: string | undefined;
-      
-      if (response.status === 429) {
-        code = 'RATE_LIMITED';
-        message = 'Rate limit exceeded. Please wait before trying again.';
-      } else if (response.status === 401) {
-        code = 'UNAUTHORIZED';
-        message = 'Invalid API key or unauthorized access.';
+      if (!response.ok) {
+        let message = `Polygon API Error: ${response.status} ${response.statusText}`;
+        let code: string | undefined;
+
+        if (response.status === 429) {
+          code = 'RATE_LIMITED';
+          message = 'Rate limit exceeded. Please wait before trying again.';
+          stockCache.handleRateLimit(); // Trigger circuit breaker
+        } else if (response.status === 401) {
+          code = 'UNAUTHORIZED';
+          message = 'Invalid API key or unauthorized access.';
+        }
+        
+        throw new StockApiError(message, response.status, code);
       }
-      
-      throw new StockApiError(message, response.status, code);
-    }
 
-    const data = await response.json();
-    
-    // Cache successful responses
-    stockCache.set(cacheKey, data);
-    
-    return data;
+      const data = await response.json();
+      
+      // Cache successful responses
+      stockCache.set(cacheKey, data);
+      stockCache.resetFailures(); // Reset failure count on success
+      
+      return data;
+    });
   } catch (error) {
     console.error('Polygon API request failed:', error);
     throw error;
@@ -310,8 +378,13 @@ export const stockApi = {
     try {
       const details = await this.getTickerDetails(symbol);
       
-      if (!details || !details.active) {
-        console.warn(`Symbol ${symbol} is not active or not found`);
+      if (!details) {
+        // Symbol not found or API error - return null for fallback handling
+        return null;
+      }
+      
+      if (!details.active) {
+        console.warn(`Symbol ${symbol} is not active`);
         return null;
       }
 
@@ -322,6 +395,11 @@ export const stockApi = {
         displayName: details.name || symbol
       };
     } catch (error) {
+      if (error instanceof StockApiError && error.status === 429) {
+        // Rate limited - throw to be handled by caller
+        throw error;
+      }
+      // Other errors (like 404) - return null for fallback
       console.warn(`Failed to get TradingView symbol for ${symbol}:`, error);
       return null;
     }
@@ -329,21 +407,74 @@ export const stockApi = {
 
   /**
    * Get multiple TradingView symbols with proper market prefixes
+   * Uses fallback strategy for rate-limited or missing symbols
    */
   async getTradingViewSymbols(symbols: string[]): Promise<{ name: string; displayName: string }[]> {
     const results: { name: string; displayName: string }[] = [];
     
+    console.log(`📊 Processing ${symbols.length} symbols for TradingView...`);
+    
+    // Check if we're rate limited and should skip API calls entirely
+    if (stockCache.isRateLimited()) {
+      console.log(`🚫 Skipping API calls due to rate limit. Using fallbacks for all symbols.`);
+      // Return all symbols with NASDAQ fallback
+      return symbols.map(symbol => ({
+        name: `NASDAQ:${symbol}`,
+        displayName: symbol
+      }));
+    }
+    
+    // Known delisted/problematic symbols to skip API calls for
+    const delistedSymbols = new Set(['BBBY', 'BIG', 'CTL', 'DISCA', 'DISCB', 'GME_OLD', 'SPCE_OLD']);
+    
     for (const symbol of symbols) {
       try {
+        // Skip API call for known delisted symbols
+        if (delistedSymbols.has(symbol)) {
+          console.log(`⚠️ Skipping delisted symbol ${symbol}, using fallback`);
+          results.push({
+            name: `NASDAQ:${symbol}`,
+            displayName: symbol
+          });
+          continue;
+        }
+        
+        // Try to get the symbol with API data
         const tvSymbol = await this.getTradingViewSymbol(symbol);
         if (tvSymbol) {
           results.push(tvSymbol);
+        } else {
+          // Fallback: Use default NASDAQ prefix for unknown symbols
+          console.log(`⚠️ Using fallback for ${symbol}`);
+          results.push({
+            name: `NASDAQ:${symbol}`,
+            displayName: symbol
+          });
         }
       } catch (error) {
-        console.warn(`Failed to process symbol ${symbol}:`, error);
+        if (error instanceof StockApiError && error.status === 429) {
+          console.log(`🚫 Rate limited while processing ${symbol}. Using fallbacks for remaining symbols.`);
+          // Use fallbacks for this and all remaining symbols
+          const remaining = symbols.slice(symbols.indexOf(symbol));
+          remaining.forEach(sym => {
+            results.push({
+              name: `NASDAQ:${sym}`,
+              displayName: sym
+            });
+          });
+          break;
+        }
+        
+        console.warn(`Failed to process symbol ${symbol}, using fallback:`, error);
+        // Fallback: Use default NASDAQ prefix for failed symbols
+        results.push({
+          name: `NASDAQ:${symbol}`,
+          displayName: symbol
+        });
       }
     }
     
+    console.log(`✅ Processed ${results.length}/${symbols.length} symbols`);
     return results;
   },
 };

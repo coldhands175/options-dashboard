@@ -11,55 +11,22 @@ import MenuIcon from "@mui/icons-material/Menu";
 import AccountCircle from "@mui/icons-material/AccountCircle";
 import NotificationsIcon from "@mui/icons-material/Notifications";
 import MoreIcon from "@mui/icons-material/MoreVert";
-import SearchIcon from "@mui/icons-material/Search";
 import LogoutIcon from "@mui/icons-material/Logout";
-import InputBase from "@mui/material/InputBase";
 import { alpha, styled } from "@mui/material/styles";
 import TradingViewWidget from "../../components/TradingViewWidget";
 import { useAuth } from "../../context/AuthContext";
+import StockSearch, { StockSymbol } from "../../components/StockSearch";
+import { stockApi, StockQuote } from "../../services/stockApi";
+import { Card, CardContent, Fade, Popper, CircularProgress } from "@mui/material";
 
-const Search = styled("div")(({ theme }) => ({
-  position: "relative",
-  borderRadius: theme.shape.borderRadius,
-  backgroundColor: alpha(theme.palette.common.white, 0.15),
-  "&:hover": {
-    backgroundColor: alpha(theme.palette.common.white, 0.25),
-  },
-  marginRight: theme.spacing(2),
-  marginLeft: 0,
-  width: "100%",
-  [theme.breakpoints.up("sm")]: {
-    marginLeft: theme.spacing(3),
-    width: "auto",
-  },
-}));
-
-const SearchIconWrapper = styled("div")(({ theme }) => ({
-  padding: theme.spacing(0, 2),
-  height: "100%",
-  position: "absolute",
-  pointerEvents: "none",
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-}));
-
-const StyledInputBase = styled(InputBase)(({ theme }) => ({
-  color: "inherit",
-  "& .MuiInputBase-input": {
-    padding: theme.spacing(1, 1, 1, 0),
-    // vertical padding + font size from searchIcon
-    paddingLeft: `calc(1em + ${theme.spacing(4)})`,
-    transition: theme.transitions.create("width"),
-    width: "100%",
-    [theme.breakpoints.up("md")]: {
-      width: "20ch",
-    },
-  },
-}));
 
 export default function OptionsAppNavbar() {
   const { user, logout } = useAuth();
+  const [selectedStock, setSelectedStock] = React.useState<StockSymbol | null>(null);
+  const [stockQuote, setStockQuote] = React.useState<StockQuote | null>(null);
+  const [quoteLoading, setQuoteLoading] = React.useState(false);
+  const [showQuote, setShowQuote] = React.useState(false);
+  const [quoteAnchorEl, setQuoteAnchorEl] = React.useState<HTMLElement | null>(null);
   
   const [anchorEl, setAnchorEl] = React.useState<null | HTMLElement>(null);
   const [mobileMoreAnchorEl, setMobileMoreAnchorEl] =
@@ -88,6 +55,37 @@ export default function OptionsAppNavbar() {
 
   const handleMobileMenuOpen = (event: React.MouseEvent<HTMLElement>) => {
     setMobileMoreAnchorEl(event.currentTarget);
+  };
+
+  // Fetch stock quote when a symbol is selected
+  const fetchStockQuote = async (symbol: StockSymbol) => {
+    setQuoteLoading(true);
+    setStockQuote(null);
+    try {
+      const quote = await stockApi.getQuote(symbol.ticker);
+      setStockQuote(quote);
+      setShowQuote(true);
+      
+      // Auto-hide quote after 10 seconds
+      setTimeout(() => {
+        setShowQuote(false);
+      }, 10000);
+    } catch (error) {
+      console.error('Failed to fetch stock quote:', error);
+      // Still show basic info even if quote fails
+      setStockQuote({
+        ticker: symbol.ticker,
+        name: symbol.name,
+        price: 0,
+        change: 0,
+        changePercent: 0,
+        updatedAt: new Date().toISOString(),
+      });
+      setShowQuote(true);
+      setTimeout(() => setShowQuote(false), 5000);
+    } finally {
+      setQuoteLoading(false);
+    }
   };
 
   const menuId = "primary-search-account-menu";
@@ -200,15 +198,59 @@ export default function OptionsAppNavbar() {
           >
             OptionsTracker
           </Typography>
-          <Search>
-            <SearchIconWrapper>
-              <SearchIcon />
-            </SearchIconWrapper>
-            <StyledInputBase
-              placeholder="Search tickers…"
-              inputProps={{ "aria-label": "search" }}
+          <Box 
+            data-search-container
+            sx={(theme) => ({ 
+            minWidth: { xs: 200, sm: 250, md: 300 },
+            maxWidth: { xs: 250, sm: 300, md: 400 },
+            '& .MuiTextField-root': {
+              '& .MuiOutlinedInput-root': {
+                backgroundColor: alpha(theme.palette.common.white, 0.15),
+                '&:hover': {
+                  backgroundColor: alpha(theme.palette.common.white, 0.25),
+                },
+                '& fieldset': {
+                  borderColor: alpha(theme.palette.common.white, 0.3),
+                },
+                '&:hover fieldset': {
+                  borderColor: alpha(theme.palette.common.white, 0.5),
+                },
+                '&.Mui-focused fieldset': {
+                  borderColor: theme.palette.primary.main,
+                },
+              },
+              '& .MuiInputLabel-root': {
+                color: alpha(theme.palette.common.white, 0.7),
+                '&.Mui-focused': {
+                  color: theme.palette.primary.main,
+                },
+              },
+              '& .MuiInputBase-input': {
+                color: 'inherit',
+              },
+            },
+          })}>
+            <StockSearch
+              label="Search stocks"
+              placeholder="Search tickers..."
+              value={selectedStock}
+              onChange={setSelectedStock}
+              onSymbolSelect={(symbol) => {
+                console.log('Stock selected from navbar:', symbol);
+                setSelectedStock(symbol);
+                
+                if (symbol) {
+                  console.log(`✅ Selected ${symbol.ticker} - ${symbol.name}`);
+                  // Set anchor element for quote popup - use the search box container
+                  const searchContainer = document.querySelector('[data-search-container]') as HTMLElement;
+                  setQuoteAnchorEl(searchContainer || event.currentTarget as HTMLElement);
+                  // Fetch and display quote
+                  fetchStockQuote(symbol);
+                }
+              }}
+              size="small"
             />
-          </Search>
+          </Box>
           <Box sx={{ flexGrow: 1 }} />
           <Box sx={{ display: { xs: "none", md: "flex" } }}>
             <IconButton
@@ -269,6 +311,60 @@ export default function OptionsAppNavbar() {
           />
         </Box>
       </AppBar>
+      
+      {/* Stock Quote Popup */}
+      <Popper 
+        open={showQuote && !!stockQuote} 
+        anchorEl={quoteAnchorEl} 
+        placement="bottom-start"
+        transition 
+        disablePortal
+        sx={{ zIndex: (theme) => theme.zIndex.drawer + 2 }}
+      >
+        {({ TransitionProps }) => (
+          <Fade {...TransitionProps} timeout={350}>
+            <Card sx={{ 
+              minWidth: 300, 
+              mt: 1,
+              boxShadow: 3,
+              border: '1px solid',
+              borderColor: 'divider'
+            }}>
+              <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
+                {quoteLoading ? (
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <CircularProgress size={16} />
+                    <Typography variant="body2">Loading quote...</Typography>
+                  </Box>
+                ) : stockQuote ? (
+                  <>
+                    <Typography variant="h6" component="div" sx={{ mb: 1 }}>
+                      {stockQuote.ticker}
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                      {stockQuote.name || selectedStock?.name}
+                    </Typography>
+                    <Typography variant="h5" component="div" sx={{ mb: 1 }}>
+                      ${stockQuote.price.toFixed(2)}
+                    </Typography>
+                    <Typography 
+                      variant="body2" 
+                      color={stockQuote.changePercent >= 0 ? 'success.main' : 'error.main'}
+                    >
+                      {stockQuote.changePercent >= 0 ? '+' : ''}{stockQuote.change.toFixed(2)} 
+                      ({stockQuote.changePercent >= 0 ? '+' : ''}{stockQuote.changePercent.toFixed(2)}%)
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
+                      Updated: {new Date(stockQuote.updatedAt).toLocaleTimeString()}
+                    </Typography>
+                  </>
+                ) : null}
+              </CardContent>
+            </Card>
+          </Fade>
+        )}
+      </Popper>
+      
       {renderMobileMenu}
       {renderMenu}
     </>

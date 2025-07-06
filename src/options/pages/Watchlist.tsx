@@ -136,21 +136,51 @@ export default function Watchlist() {
   // Create symbol groups based on user preferences
   const createSymbolGroups = (): TradingViewSymbolGroup[] => {
     const groups: TradingViewSymbolGroup[] = [];
-
-    // Add default watchlist with converted symbols
-    if (defaultSymbols.length > 0) {
-      groups.push({
-        name: "Market Leaders",
-        symbols: defaultSymbols
+    
+    // Known problematic/delisted symbols to filter out
+    const problematicSymbols = new Set([
+      'DISCA', 'DISCB', 'CTL', 'BIG', 'BBBY', 'WYN', 'FISV_OLD', 'GME_OLD'
+    ]);
+    
+    // Function to filter and deduplicate symbols
+    const filterValidSymbols = (symbols: TradingViewSymbol[]) => {
+      return symbols.filter(symbol => {
+        const ticker = symbol.displayName || symbol.name.split(':')[1] || symbol.name;
+        return !problematicSymbols.has(ticker);
       });
+    };
+
+    // Add default watchlist with filtered symbols
+    if (defaultSymbols.length > 0) {
+      const filteredDefault = filterValidSymbols(defaultSymbols);
+      if (filteredDefault.length > 0) {
+        groups.push({
+          name: "Market Leaders",
+          symbols: filteredDefault
+        });
+      }
     }
 
-    // Add traded stocks if enabled and converted
+    // Add traded stocks if enabled, filtered, and deduplicated
     if (includeTradedStocks && tradedSymbols.length > 0) {
-      groups.push({
-        name: "My Traded Stocks",
-        symbols: tradedSymbols
+      const filteredTraded = filterValidSymbols(tradedSymbols);
+      
+      // Deduplicate by removing symbols that already exist in default list
+      const defaultTickers = new Set(
+        defaultSymbols.map(s => s.displayName || s.name.split(':')[1] || s.name)
+      );
+      
+      const uniqueTraded = filteredTraded.filter(symbol => {
+        const ticker = symbol.displayName || symbol.name.split(':')[1] || symbol.name;
+        return !defaultTickers.has(ticker);
       });
+      
+      if (uniqueTraded.length > 0) {
+        groups.push({
+          name: "My Traded Stocks",
+          symbols: uniqueTraded
+        });
+      }
     }
 
     return groups;
@@ -203,8 +233,8 @@ export default function Watchlist() {
                 📊 Found {tradedStocks.length} stocks from your trades
               </Typography>
               <Typography variant="caption" color="info.contrastText">
-                ✅ Converted {tradedSymbols.length} symbols with proper market prefixes: {tradedSymbols.slice(0, 3).map(s => s.name).join(', ')}
-                {tradedSymbols.length > 3 && ` and ${tradedSymbols.length - 3} more...`}
+                ✅ Displaying {symbolGroups.reduce((total, group) => total + group.symbols.length, 0)} valid symbols 
+                (filtered out delisted/problematic stocks)
               </Typography>
             </Box>
           )}
