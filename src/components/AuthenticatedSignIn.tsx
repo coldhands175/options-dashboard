@@ -141,6 +141,11 @@ export default function AuthenticatedSignIn(props: { disableCustomTheme?: boolea
           >
             Sign in to Options Dashboard
           </Typography>
+          <Alert severity="info" sx={{ mb: 2 }}>
+            <Typography variant="body2">
+              <strong>Development Mode:</strong> Use <code>msbaxter@gmail.com</code> / <code>admin</code> for admin access
+            </Typography>
+          </Alert>
           {loginError && (
             <Alert severity="error" sx={{ mb: 2 }}>
               {loginError}

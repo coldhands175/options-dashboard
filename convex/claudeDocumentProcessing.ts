@@ -107,13 +107,15 @@ export const processDocumentWithClaude = action({
 
 // Helper function to process document with Claude Sonnet 4 API
 async function processWithClaude(base64Content: string, apiKey: string) {
-  // Enhanced prompt optimized for Claude's strengths
-  const prompt = `You are a specialized financial document analysis expert with deep expertise in options trading. I need you to analyze this PDF document with precision and extract all options trading data while classifying the document type.
+  // Enhanced prompt optimized for Claude's strengths with improved trade classification and multi-leg detection
+  const prompt = `You are a specialized financial document analysis expert with deep expertise in options trading and strategy identification. I need you to analyze this PDF document with precision and extract all options trading data while classifying the document type and identifying multi-leg strategies.
 
 <task>
 1. **Document Classification**: Identify the document type, broker, date range, and provide confidence assessment
 2. **Options Trade Extraction**: Extract every single options trade with complete accuracy
-3. **Context-Aware Classification**: Use sophisticated reasoning to determine correct trade types (BUY_TO_OPEN vs BUY_TO_CLOSE, etc.)
+3. **Advanced Trade Type Classification**: Use sophisticated contextual reasoning to determine correct trade types (BUY_TO_OPEN vs BUY_TO_CLOSE, etc.)
+4. **Multi-Leg Strategy Detection**: Identify and group related trades that form complex strategies
+5. **Position Flow Analysis**: Track the lifecycle of positions from opening to closing
 </task>
 
 <output_format>
@@ -144,6 +146,7 @@ Respond with ONLY a valid JSON object using this exact structure:
       "commission": 1.00,
       "fees": 0.50,
       "status": "EXECUTED" | "CANCELLED" | "PENDING" | "EXPIRED",
+      "strategyId": "AAPL-20240315-VERTICAL-001" | null,
       "notes": "Any relevant context, data quality notes, or unusual circumstances",
       "extractionConfidence": 0.95
     }
@@ -186,12 +189,46 @@ You must use sophisticated contextual reasoning to determine trade types. This i
 - BUY_TO_CLOSE: Purchasing contracts to close out a previously sold/written position (paying premium to exit short)
 - SELL_TO_CLOSE: Selling contracts to close out a previously purchased position (receiving premium to exit long)
 
-**Advanced Context Analysis:**
-1. **Sequential Pattern Recognition**: Analyze trade sequences within the same contract
-2. **Premium Flow Logic**: Opening positions establish premium flow direction, closing reverses it
-3. **Position References**: Look for explicit mentions of "opening", "closing", position numbers, or existing holdings
-4. **Strategy Context**: Identify covered calls, protective puts, spreads, and other multi-leg strategies
-5. **Temporal Analysis**: Use trade timing and quantities to infer position relationships
+**CRITICAL: Advanced Trade Type Classification Logic:**
+
+**Primary Classification Rules (Apply These First):**
+1. **Document Context Clues**: Look for explicit "TO OPEN" or "TO CLOSE" language in the document
+2. **Position Flow Analysis**: Track the chronological sequence of trades in the same underlying and contract
+3. **Quantity Net Analysis**: Opening trades typically start from zero position, closing trades reduce existing positions
+4. **Premium Direction vs. Action**: 
+   - BUY_TO_OPEN: Paying premium to establish a long options position (most common for speculation)
+   - SELL_TO_OPEN: Receiving premium to establish a short options position (covered calls, cash-secured puts)
+   - BUY_TO_CLOSE: Paying premium to close out a previously written/sold position
+   - SELL_TO_CLOSE: Receiving premium to close out a previously purchased position
+
+**Default Assumptions for Unclear Cases:**
+- If buying options and no prior position indicated → **BUY_TO_OPEN** (most common case)
+- If selling options and no prior position indicated → **SELL_TO_OPEN**
+- Only use "TO_CLOSE" when there's clear evidence of a prior opposing position
+
+**Multi-Leg Strategy Detection:**
+1. **Same-Day Multi-Leg Trades**: Multiple options trades on the same underlying on the same day
+2. **Spread Indicators**: Look for simultaneous buy/sell of different strikes or expirations
+3. **Strategy Keywords**: "spread", "condor", "straddle", "strangle", "butterfly", "collar"
+4. **Quantity Matching**: Equal quantities of related contracts suggest strategy legs
+5. **Strike Price Patterns**: Sequential or symmetric strike prices indicate spreads
+
+**Strategy ID Generation:**
+For multi-leg strategies, generate a unique strategyId using this format:
+- Format: "[SYMBOL]-[EXPIRY_YYYYMMDD]-[STRATEGY_TYPE]-[SEQUENCE]"
+- Examples:
+  * "AAPL-20240315-VERTICAL-001" (Bull call spread on AAPL expiring Mar 15, 2024)
+  * "TSLA-20240419-STRADDLE-001" (Long straddle on TSLA expiring Apr 19, 2024)
+  * "SPY-20240301-IRONCONDOR-001" (Iron condor on SPY expiring Mar 1, 2024)
+- All trades in the same strategy must use the same strategyId
+- Single-leg trades should have strategyId set to null
+
+**Strategy Identification in Notes:**
+When you identify related trades that form a strategy, note them as:
+- "Part of [STRATEGY_NAME]: Leg [N] of [TOTAL]"
+- "Vertical spread with [SYMBOL] [OTHER_STRIKE] [EXPIRY]"
+- "Iron condor - [SHORT_PUT_STRIKE]/[LONG_PUT_STRIKE]/[LONG_CALL_STRIKE]/[SHORT_CALL_STRIKE]"
+- "Covered call on existing [SYMBOL] stock position"
 
 **Data Validation Standards:**
 - quantity: Positive integers only (1, 5, 10, etc.)

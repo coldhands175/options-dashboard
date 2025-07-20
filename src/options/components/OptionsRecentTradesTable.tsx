@@ -86,9 +86,9 @@ export default function OptionsRecentTradesTable({ trades, loading, error }: Opt
               </TableRow>
             </TableHead>
             <TableBody>
-              {trades.map((trade) => (
+              {trades.map((trade, index) => (
                 <TableRow
-                  key={trade.id}
+                  key={trade.id || trade._id || `${trade.symbol}-${trade.transactionDate}-${index}`}
                   sx={{ "&:last-child td, &:last-child th": { border: 0 } }}
                 >
                   <TableCell component="th" scope="row">

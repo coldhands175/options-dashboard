@@ -12,7 +12,7 @@ export interface Trade {
   tradeType: 'BUY_TO_OPEN' | 'SELL_TO_OPEN' | 'BUY_TO_CLOSE' | 'SELL_TO_CLOSE' | 'ASSIGNMENT' | 'EXPIRATION';
   symbol: string;           // Underlying stock symbol
   contractType: 'CALL' | 'PUT';
-  quantity: number;         // Number of contracts (positive for buy, negative for sell)
+  quantity: number;         // Number of contracts (negative for sales, positive for purchases)
   expirationDate: string;   // Option expiration date (YYYY-MM-DD)
   strikePrice: number;      // Strike price
   premium: number;          // Premium received/paid per contract (always positive)

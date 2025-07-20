@@ -2,6 +2,34 @@ import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
 import { Id } from "./_generated/dataModel";
 
+// Helper function to check if user is admin
+const requireAdmin = async (ctx: any, userEmail: string) => {
+  const user = await ctx.db
+    .query("users")
+    .withIndex("by_email", (q: any) => q.eq("email", userEmail))
+    .unique();
+  
+  if (!user || !user.isActive || user.role !== "ADMIN") {
+    throw new Error("Unauthorized: Admin access required");
+  }
+  
+  return user;
+};
+
+// Helper function to get user by email
+const getUserByEmail = async (ctx: any, userEmail: string) => {
+  const user = await ctx.db
+    .query("users")
+    .withIndex("by_email", (q: any) => q.eq("email", userEmail))
+    .unique();
+  
+  if (!user || !user.isActive) {
+    throw new Error("User not found or inactive");
+  }
+  
+  return user;
+};
+
 // === TRADE MUTATIONS ===
 
 // Add a new trade
@@ -404,7 +432,7 @@ export const getMultiTradePositions = query({
           tradeCount: trades.length,
           trades: trades.sort((a, b) => new Date(a.transactionDate).getTime() - new Date(b.transactionDate).getTime()),
           totalQuantity: trades.reduce((sum, trade) => {
-            return sum + (trade.tradeType.includes('OPEN') ? trade.quantity : -trade.quantity);
+            return sum + trade.quantity; // quantity is already signed
           }, 0),
           tradeTypes: [...new Set(trades.map(t => t.tradeType))],
         });
@@ -500,7 +528,287 @@ export const fixTradeTypeClassifications = mutation({
   },
 });
 
+// === ADMIN-ONLY TRADE FUNCTIONS ===
+
+// Add bulk trades (Admin only) - for file uploads
+export const addBulkTrades = mutation({
+  args: {
+    userEmail: v.string(), // Email of the requesting user
+    trades: v.array(v.object({
+      userId: v.string(),
+      positionId: v.optional(v.string()),
+      transactionDate: v.string(),
+      tradeType: v.union(
+        v.literal("BUY_TO_OPEN"),
+        v.literal("SELL_TO_OPEN"),
+        v.literal("BUY_TO_CLOSE"),
+        v.literal("SELL_TO_CLOSE"),
+        v.literal("ASSIGNMENT"),
+        v.literal("EXPIRATION")
+      ),
+      symbol: v.string(),
+      contractType: v.union(v.literal("CALL"), v.literal("PUT")),
+      quantity: v.number(),
+      expirationDate: v.string(),
+      strikePrice: v.number(),
+      premium: v.number(),
+      bookCost: v.number(),
+      commission: v.optional(v.number()),
+      fees: v.optional(v.number()),
+      status: v.union(
+        v.literal("EXECUTED"),
+        v.literal("CANCELLED"),
+        v.literal("PENDING"),
+        v.literal("EXPIRED")
+      ),
+      notes: v.optional(v.string()),
+      extractionConfidence: v.optional(v.number()),
+      impliedVolatility: v.optional(v.number()),
+      delta: v.optional(v.number()),
+      gamma: v.optional(v.number()),
+      theta: v.optional(v.number()),
+      vega: v.optional(v.number()),
+    })),
+  },
+  returns: v.array(v.id("trades")),
+  handler: async (ctx, args) => {
+    // Check admin permissions
+    await requireAdmin(ctx, args.userEmail);
+    
+    const now = new Date().toISOString();
+    const tradeIds: any[] = [];
+    const positionsToUpdate = new Set<string>();
+    
+    for (const tradeData of args.trades) {
+      // Generate positionId if not provided
+      const positionId = tradeData.positionId || 
+        `${tradeData.symbol}-${tradeData.expirationDate}-${tradeData.strikePrice}-${tradeData.contractType}`;
+      
+      const fullTradeData = {
+        ...tradeData,
+        positionId,
+        createdAt: now,
+        updatedAt: now,
+      };
+      
+      const tradeId = await ctx.db.insert("trades", fullTradeData);
+      tradeIds.push(tradeId);
+      positionsToUpdate.add(`${tradeData.userId}:${positionId}`);
+    }
+    
+    // Update all affected positions
+    for (const positionKey of positionsToUpdate) {
+      const [userId, positionId] = positionKey.split(':');
+      await updatePositionFromTrades(ctx.db, userId, positionId);
+    }
+    
+    return tradeIds;
+  },
+});
+
+// Delete all trades for a user (Admin only)
+export const deleteAllUserTrades = mutation({
+  args: {
+    userEmail: v.string(), // Email of the requesting admin
+    targetUserId: v.string(), // User whose trades to delete
+  },
+  returns: v.number(), // Number of deleted trades
+  handler: async (ctx, args) => {
+    // Check admin permissions
+    await requireAdmin(ctx, args.userEmail);
+    
+    const trades = await ctx.db
+      .query("trades")
+      .withIndex("by_user", (q) => q.eq("userId", args.targetUserId))
+      .collect();
+    
+    const positionsToUpdate = new Set<string>();
+    
+    for (const trade of trades) {
+      await ctx.db.delete(trade._id);
+      if (trade.positionId) {
+        positionsToUpdate.add(`${trade.userId}:${trade.positionId}`);
+      }
+    }
+    
+    // Update all affected positions (likely to delete them)
+    for (const positionKey of positionsToUpdate) {
+      const [userId, positionId] = positionKey.split(':');
+      await updatePositionFromTrades(ctx.db, userId, positionId);
+    }
+    
+    return trades.length;
+  },
+});
+
+// Get all users' trade summary (Admin only)
+export const getAllUsersTradesSummary = query({
+  args: {
+    userEmail: v.string(), // Email of the requesting admin
+  },
+  returns: v.array(v.object({
+    userId: v.string(),
+    tradeCount: v.number(),
+    positionCount: v.number(),
+    totalVolume: v.number(),
+    firstTradeDate: v.optional(v.string()),
+    lastTradeDate: v.optional(v.string()),
+  })),
+  handler: async (ctx, args) => {
+    // Check admin permissions
+    const adminUser = await requireAdmin(ctx, args.userEmail);
+    
+    const trades = await ctx.db.query("trades").collect();
+    const positions = await ctx.db.query("positions").collect();
+    
+    const userSummaries = new Map<string, any>();
+    
+    // Process trades
+    for (const trade of trades) {
+      if (!userSummaries.has(trade.userId)) {
+        userSummaries.set(trade.userId, {
+          userId: trade.userId,
+          tradeCount: 0,
+          positionCount: 0,
+          totalVolume: 0,
+          firstTradeDate: trade.transactionDate,
+          lastTradeDate: trade.transactionDate,
+        });
+      }
+      
+      const summary = userSummaries.get(trade.userId);
+      summary.tradeCount++;
+      summary.totalVolume += Math.abs(trade.bookCost);
+      
+      if (trade.transactionDate < summary.firstTradeDate) {
+        summary.firstTradeDate = trade.transactionDate;
+      }
+      if (trade.transactionDate > summary.lastTradeDate) {
+        summary.lastTradeDate = trade.transactionDate;
+      }
+    }
+    
+    // Process positions
+    for (const position of positions) {
+      const summary = userSummaries.get(position.userId);
+      if (summary) {
+        summary.positionCount++;
+      }
+    }
+    
+    return Array.from(userSummaries.values());
+  },
+});
+
+// === GLOBAL DATA FUNCTIONS ===
+
+// Get all trades in the system (for single-source dashboard)
+export const getAllTrades = query({
+  args: {},
+  handler: async (ctx) => {
+    const trades = await ctx.db
+      .query("trades")
+      .order("desc")
+      .collect();
+    
+    return trades;
+  },
+});
+
+// Get all positions in the system (for single-source dashboard)
+export const getAllPositions = query({
+  args: {},
+  handler: async (ctx) => {
+    const positions = await ctx.db
+      .query("positions")
+      .order("desc")
+      .collect();
+    
+    return positions;
+  },
+});
+
 // === DEBUG FUNCTIONS ===
+
+// Debug specific position calculation
+export const debugPositionCalculation = query({
+  args: {
+    positionId: v.string(),
+  },
+  handler: async (ctx, { positionId }) => {
+    // Get all trades for this position
+    const trades = await ctx.db
+      .query("trades")
+      .withIndex("by_position", (q) => q.eq("positionId", positionId))
+      .collect();
+    
+    if (trades.length === 0) {
+      return { error: "No trades found for position" };
+    }
+    
+    // Sort trades by date
+    trades.sort((a: any, b: any) => new Date(a.transactionDate).getTime() - new Date(b.transactionDate).getTime());
+    
+    // Aggregate trade data
+    const aggregated = trades.reduce((acc: any, trade: any) => {
+      acc.netQuantity += trade.quantity;
+      const premiumAmount = trade.premium * Math.abs(trade.quantity) * 100;
+      acc.totalPremium += trade.quantity < 0 ? premiumAmount : -premiumAmount;
+      acc.totalCommission += trade.commission || 0;
+      acc.totalFees += trade.fees || 0;
+      return acc;
+    }, {
+      netQuantity: 0,
+      totalPremium: 0,
+      totalCommission: 0,
+      totalFees: 0,
+    });
+    
+    const firstTrade = trades[0];
+    const daysToExpiration = calculateDaysToExpiration(firstTrade.expirationDate);
+    
+    // Debug calculations
+    const isNetQuantityZero = Math.abs(aggregated.netQuantity) < 0.001;
+    const isPastExpiration = daysToExpiration <= 0;
+    const isSingleTrade = trades.length === 1;
+    
+    let status: "OPEN" | "CLOSED" | "EXPIRED" | "ASSIGNED" = "OPEN";
+    let realizedPL: number | undefined;
+    
+    if (isNetQuantityZero) {
+      status = "CLOSED";
+      realizedPL = aggregated.totalPremium - aggregated.totalCommission - aggregated.totalFees;
+    } else if (isPastExpiration) {
+      if (isSingleTrade) {
+        status = "EXPIRED";
+        realizedPL = aggregated.totalPremium - aggregated.totalCommission - aggregated.totalFees;
+      } else {
+        status = "ASSIGNED";
+        realizedPL = aggregated.totalPremium - aggregated.totalCommission - aggregated.totalFees;
+      }
+    }
+    
+    return {
+      positionId,
+      trades: trades.map(t => ({
+        id: t._id,
+        date: t.transactionDate,
+        type: t.tradeType,
+        quantity: t.quantity,
+        premium: t.premium,
+      })),
+      aggregated,
+      daysToExpiration,
+      checks: {
+        isNetQuantityZero,
+        isPastExpiration,
+        isSingleTrade,
+      },
+      calculatedStatus: status,
+      calculatedRealizedPL: realizedPL,
+    };
+  },
+});
 
 // Debug: Get all trades with their userIds (temporary for migration verification)
 export const debugGetAllTrades = query({
@@ -514,6 +822,98 @@ export const debugGetAllTrades = query({
       transactionDate: trade.transactionDate,
       tradeType: trade.tradeType
     }));
+  },
+});
+
+// Debug: Get all users to check their roles and status
+export const debugGetAllUsers = query({
+  args: {},
+  handler: async (ctx) => {
+    const users = await ctx.db.query("users").collect();
+    return users.map(user => ({
+      _id: user._id,
+      email: user.email,
+      role: user.role,
+      isActive: user.isActive,
+      name: user.name
+    }));
+  },
+});
+
+// Create default admin user for development
+export const createDefaultAdminUser = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const adminEmail = 'msbaxter@gmail.com';
+    const now = new Date().toISOString();
+    
+    // Check if admin user already exists
+    const existingUser = await ctx.db
+      .query("users")
+      .withIndex("by_email", (q) => q.eq("email", adminEmail))
+      .unique();
+
+    if (existingUser) {
+      return { message: 'Admin user already exists', userId: existingUser._id };
+    }
+
+    // Create admin user
+    const userId = await ctx.db.insert("users", {
+      email: adminEmail,
+      firstName: 'Michael',
+      lastName: 'Baxter',
+      name: 'Michael Baxter',
+      role: 'ADMIN',
+      isActive: true,
+      lastLogin: now,
+      loginCount: 1,
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    return { message: 'Admin user created successfully', userId };
+  },
+});
+
+// Recalculate all positions with new P&L logic (Admin only)
+export const recalculateAllPositions = mutation({
+  args: {
+    userEmail: v.string(),
+  },
+  handler: async (ctx, args) => {
+    // Check admin permissions
+    await requireAdmin(ctx, args.userEmail);
+    
+    // Get all unique position IDs from trades
+    const trades = await ctx.db.query("trades").collect();
+    const positionIds = new Set<string>();
+    const userPositions = new Map<string, Set<string>>();
+    
+    for (const trade of trades) {
+      if (trade.positionId) {
+        positionIds.add(trade.positionId);
+        
+        if (!userPositions.has(trade.userId)) {
+          userPositions.set(trade.userId, new Set());
+        }
+        userPositions.get(trade.userId)!.add(trade.positionId);
+      }
+    }
+    
+    let recalculatedCount = 0;
+    
+    // Recalculate each position
+    for (const [userId, positions] of userPositions) {
+      for (const positionId of positions) {
+        await updatePositionFromTrades(ctx.db, userId, positionId);
+        recalculatedCount++;
+      }
+    }
+    
+    return {
+      message: `Recalculated ${recalculatedCount} positions with updated P&L logic`,
+      positionsRecalculated: recalculatedCount
+    };
   },
 });
 
@@ -561,48 +961,72 @@ async function updatePositionFromTrades(db: any, userId: string, positionId: str
   
   // Sort trades by date
   trades.sort((a: any, b: any) => new Date(a.transactionDate).getTime() - new Date(b.transactionDate).getTime());
-  
   // Aggregate trade data
   const aggregated = trades.reduce((acc: any, trade: any) => {
+    // Calculate net quantity (quantity is already signed: negative for sells, positive for buys)
     acc.netQuantity += trade.quantity;
-    acc.totalPremium += trade.premium * Math.abs(trade.quantity);
+    
+    // Calculate total premiums (credits for sells, debits for buys)
+    // Note: Each contract represents 100 shares
+    const premiumAmount = trade.premium * Math.abs(trade.quantity) * 100;
+    acc.totalPremium += trade.quantity < 0 ? premiumAmount : -premiumAmount;
+
+    // Sum commissions and fees
     acc.totalCommission += trade.commission || 0;
     acc.totalFees += trade.fees || 0;
-    
-    // Track opening/closing for P&L calculation
-    if (trade.tradeType.includes('OPEN')) {
-      acc.openingPremium += trade.premium * Math.abs(trade.quantity);
-    } else if (trade.tradeType.includes('CLOSE')) {
-      acc.closingPremium += trade.premium * Math.abs(trade.quantity);
-    }
-    
+
     return acc;
   }, {
     netQuantity: 0,
     totalPremium: 0,
     totalCommission: 0,
     totalFees: 0,
-    openingPremium: 0,
-    closingPremium: 0,
   });
   
   const firstTrade = trades[0];
   const lastTrade = trades[trades.length - 1];
   
-  // Determine position status
+  // Determine position status and calculate P&L
   let status: "OPEN" | "CLOSED" | "EXPIRED" | "ASSIGNED" = "OPEN";
   let closeDate: string | undefined;
   let realizedPL: number | undefined;
   
-  if (Math.abs(aggregated.netQuantity) < 0.001) { // Position is closed (accounting for floating point precision)
+  // Calculate days to expiration
+  const daysToExpiration = calculateDaysToExpiration(firstTrade.expirationDate);
+  
+  if (Math.abs(aggregated.netQuantity) < 0.001) { 
+    // Position is closed (accounting for floating point precision)
     status = "CLOSED";
     closeDate = lastTrade.transactionDate;
     // Calculate realized P&L for closed positions
-    realizedPL = aggregated.closingPremium - aggregated.openingPremium - aggregated.totalCommission - aggregated.totalFees;
+    realizedPL = aggregated.totalPremium - aggregated.totalCommission - aggregated.totalFees;
+  } else {
+    // Position still has net quantity - check if it should be expired or assigned
+    if (daysToExpiration <= 0) {
+      // Position has passed expiration date
+      if (trades.length === 1) {
+        // Single trade that has expired - realize the P&L
+        status = "EXPIRED";
+        closeDate = firstTrade.expirationDate;
+        // For expired positions with only one trade, the realized P&L is the premium collected minus costs
+        // (Theoretically, there should be a closing trade at $0, but if there isn't, we treat it as expired)
+        realizedPL = aggregated.totalPremium - aggregated.totalCommission - aggregated.totalFees;
+      } else {
+        // Multiple trades but still has net quantity and past expiration - likely assigned
+        status = "ASSIGNED";
+        closeDate = firstTrade.expirationDate;
+        // Calculate realized P&L up to assignment
+        realizedPL = aggregated.totalPremium - aggregated.totalCommission - aggregated.totalFees;
+      }
+    }
+    // If daysToExpiration > 0 and netQuantity != 0, keep status as "OPEN"
   }
   
-  // Calculate days to expiration for open positions
-  const daysToExpiration = status === "OPEN" ? calculateDaysToExpiration(firstTrade.expirationDate) : undefined;
+  // Check if position already exists
+  const existingPosition = await db
+    .query("positions")
+    .withIndex("by_position_key", (q) => q.eq("positionKey", positionId))
+    .first();
   
   const positionData = {
     userId,
@@ -620,16 +1044,10 @@ async function updatePositionFromTrades(db: any, userId: string, positionId: str
     totalCommission: aggregated.totalCommission,
     totalFees: aggregated.totalFees,
     realizedPL,
-    daysToExpiration,
+    daysToExpiration: status === "OPEN" ? daysToExpiration : undefined,
     lastUpdated: new Date().toISOString(),
-    createdAt: firstTrade.createdAt,
+    createdAt: existingPosition?.createdAt || new Date().toISOString(),
   };
-  
-  // Check if position already exists
-  const existingPosition = await db
-    .query("positions")
-    .withIndex("by_position_key", (q) => q.eq("positionKey", positionId))
-    .first();
   
   if (existingPosition) {
     await db.patch(existingPosition._id, positionData);

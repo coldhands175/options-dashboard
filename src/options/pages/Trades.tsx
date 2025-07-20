@@ -21,7 +21,7 @@ import ArrowUpwardIcon from "@mui/icons-material/ArrowUpward";
 import TableSortLabel from "@mui/material/TableSortLabel"; // Import TableSortLabel
 import { Trade } from "../models/types"; // Ensure Trade interface is correctly imported
 import { useQuery, api } from '../../lib/convex';
-import { getCurrentUserId } from '../../lib/convexUtils';
+import { getCurrentUserId, convexTradeToTrade } from '../../lib/convexUtils';
 
 export default function Trades() {
   const userId = getCurrentUserId();
@@ -34,31 +34,20 @@ export default function Trades() {
     if (convexTrades !== undefined) {
       if (convexTrades) {
         // Convert Convex trades to our Trade format
-        const convertedTrades = convexTrades.map(trade => ({
-          id: parseInt(trade._id.replace('trades:', ''), 36),
-          positionId: trade.positionId,
-          transactionDate: trade.transactionDate,
-          tradeType: trade.tradeType,
-          symbol: trade.symbol,
-          contractType: trade.contractType,
-          quantity: trade.quantity,
-          expirationDate: trade.expirationDate,
-          strikePrice: trade.strikePrice,
-          premium: trade.premium,
-          bookCost: trade.bookCost,
-          commission: trade.commission,
-          fees: trade.fees,
-          status: trade.status,
-          notes: trade.notes,
-          impliedVolatility: trade.impliedVolatility,
-          delta: trade.delta,
-          gamma: trade.gamma,
-          theta: trade.theta,
-          vega: trade.vega,
-        }));
+        const convertedTrades = convexTrades.map(convexTradeToTrade);
         setTrades(convertedTrades);
+        setError(null);
+      } else {
+        setTrades([]);
       }
       setLoading(false);
+    }
+  }, [convexTrades]);
+
+  // Handle loading and error states from useQuery
+  React.useEffect(() => {
+    if (convexTrades === undefined) {
+      setLoading(true);
     }
   }, [convexTrades]);
 

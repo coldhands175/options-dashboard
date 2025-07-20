@@ -89,7 +89,7 @@ export default function CrmMainDashboard() {
       {/* Stats Cards row */}
       <Grid container spacing={2} sx={{ mb: 3 }}>
         {statCardsData.map((card, index) => (
-          <Grid key={index} item xs={12} sm={6} lg={3}>
+          <Grid key={index} size={{ xs: 12, sm: 6, lg: 3 }}>
             <CrmStatCard
               title={card.title}
               value={card.value}
@@ -104,10 +104,10 @@ export default function CrmMainDashboard() {
 
       {/* Tables & Other content */}
       <Grid container spacing={2} sx={{ mb: 3 }}>
-        <Grid item xs={12} lg={8}>
+        <Grid size={{ xs: 12, lg: 8 }}>
           <CrmRecentDealsTable />
         </Grid>
-        <Grid item xs={12} lg={4}>
+        <Grid size={{ xs: 12, lg: 4 }}>
           <Stack spacing={2}>
             <CrmUpcomingTasks />
           </Stack>

@@ -111,7 +111,7 @@ export default function OptionsStatCard({
             ]}
             height={50}
             margin={{ top: 0, bottom: 0, left: 0, right: 0 }}
-            xAxis={[{ scaleType: "band", data: [], hideTooltip: true }]}
+            xAxis={[{ scaleType: "band", data: data.map((_, index) => index), hideTooltip: true }]}
             yAxis={[{ max: Math.max(...data) * 1.2, hideTooltip: true }]}
             disableAxisListener
             skipAnimation

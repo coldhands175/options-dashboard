@@ -15,19 +15,17 @@ import OptionsAllocationChart from "./OptionsAllocationChart";
 import TradingViewWidget from "../../components/TradingViewWidget";
 import { useTheme } from "@mui/material";
 import { getTickerSymbolsFromConfig } from "../../config/symbols";
-import { Trade } from "../models/types";
-import { PositionManager } from "../models/positionManager";
+import { Trade, Position } from "../models/types";
 import { useQuery } from '../../lib/convex';
 import { api } from '../../../convex/_generated/api';
-import { getCurrentUserId } from '../../lib/convexUtils';
+import { convexPositionToPosition, convexTradeToTrade } from '../../lib/convexUtils';
+// NOTE: Removed getCurrentUserId import since we're using global data
 
 // Utility function to get the most recent quarter with actual position data
-const getMostRecentQuarterWithData = (trades: Trade[]) => {
-  if (trades.length === 0) return { start: new Date(), end: new Date() };
+const getMostRecentQuarterWithData = (positions: Position[]) => {
+  if (positions.length === 0) return { start: new Date(), end: new Date() };
 
-  const positionManager = new PositionManager(trades);
-  const allPositions = positionManager.getPositions();
-  const closedPositions = allPositions.filter(p => 
+  const closedPositions = positions.filter(p => 
     (p.status === 'CLOSED' || p.status === 'EXPIRED') && p.closeDate
   );
 
@@ -136,8 +134,8 @@ const getStatCardsData = (trades: Trade[]) => {
 
 export default function OptionsMainDashboard() {
   const theme = useTheme();
-  const userId = getCurrentUserId();
-  const convexTrades = useQuery(api.functions.getTrades, { userId });
+  // Using getAllTrades for single-source dashboard - all users see the same data
+  const convexTrades = useQuery(api.functions.getAllTrades);
   const [trades, setTrades] = React.useState<Trade[]>([]);
   const [loading, setLoading] = React.useState<boolean>(true);
   const [error, setError] = React.useState<string | null>(null);

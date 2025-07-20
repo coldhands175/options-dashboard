@@ -7,7 +7,7 @@ export default defineSchema({
     // User relationship
     userId: v.string(), // Will be replaced with proper auth later
     
-    // Trade identification
+    // Trade identification  
     positionId: v.optional(v.string()), // Links to position for grouping
     transactionDate: v.string(), // ISO date string (YYYY-MM-DD)
     
@@ -24,7 +24,7 @@ export default defineSchema({
     // Contract details
     symbol: v.string(),
     contractType: v.union(v.literal("CALL"), v.literal("PUT")),
-    quantity: v.number(), // Positive for buy, negative for sell
+    quantity: v.number(), // Negative for sales (SELL_*), positive for purchases (BUY_*)
     expirationDate: v.string(), // ISO date string (YYYY-MM-DD)
     strikePrice: v.number(),
     
@@ -38,22 +38,9 @@ export default defineSchema({
     status: v.union(
       v.literal("EXECUTED"),
       v.literal("CANCELLED"), 
-      v.literal("PENDING"),
-      v.literal("EXPIRED")
+      v.literal("PENDING")
     ),
     notes: v.optional(v.string()),
-    extractionConfidence: v.optional(v.number()), // AI extraction confidence (0.0-1.0)
-    
-    // Optional Greeks for advanced analysis
-    impliedVolatility: v.optional(v.number()),
-    delta: v.optional(v.number()),
-    gamma: v.optional(v.number()),
-    theta: v.optional(v.number()),
-    vega: v.optional(v.number()),
-    
-    // Metadata
-    createdAt: v.string(),
-    updatedAt: v.string(),
   })
   .index("by_user", ["userId"])
   .index("by_symbol", ["symbol"])
@@ -162,12 +149,41 @@ export default defineSchema({
   .index("by_user", ["userId"])
   .index("by_status", ["status"]),
 
-  // User table (basic structure for now)
+  // Enhanced user table with authentication and roles
   users: defineTable({
+    // Core identity
     email: v.string(),
-    name: v.optional(v.string()),
-    createdAt: v.string(),
+    xanoUserId: v.optional(v.string()), // Link to Xano user ID
+    
+    // Profile information
+    firstName: v.optional(v.string()),
+    lastName: v.optional(v.string()),
+    name: v.optional(v.string()), // Full name or display name
+    
+    // Authentication and authorization
+    role: v.union(
+      v.literal("ADMIN"),
+      v.literal("USER")
+    ),
+    isActive: v.boolean(),
+    
+    // Security and session management
     lastLogin: v.optional(v.string()),
+    loginCount: v.optional(v.number()),
+    
+    // Preferences and settings
+    preferences: v.optional(v.object({
+      theme: v.optional(v.union(v.literal("light"), v.literal("dark"))),
+      notifications: v.optional(v.boolean()),
+      defaultBroker: v.optional(v.string()),
+    })),
+    
+    // Metadata
+    createdAt: v.string(),
+    updatedAt: v.string(),
   })
-  .index("by_email", ["email"]),
+  .index("by_email", ["email"])
+  .index("by_xano_user_id", ["xanoUserId"])
+  .index("by_role", ["role"])
+  .index("by_active_users", ["isActive"]),
 });

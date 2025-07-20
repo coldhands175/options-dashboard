@@ -1,12 +1,15 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { useMutation, useQuery } from 'convex/react';
+import { api } from '../lib/convex';
 
 export interface User {
   id: string;
+  convexUserId?: string; // Convex user ID after sync
   email: string;
   firstName?: string;
   lastName?: string;
   isAdmin: 'Yes' | 'No';
-  // Add other user properties as needed based on your Xano user structure
+  role?: 'ADMIN' | 'USER';
 }
 
 export interface AuthContextType {
@@ -14,8 +17,10 @@ export interface AuthContextType {
   authToken: string | null;
   isLoading: boolean;
   isAuthenticated: boolean;
+  isConvexSynced: boolean;
   login: (email: string, password: string) => Promise<void>;
   logout: () => void;
+  checkAdminStatus: () => boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -36,6 +41,14 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [authToken, setAuthToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isConvexSynced, setIsConvexSynced] = useState(false);
+
+  // Convex mutations and queries
+  const syncUserMutation = useMutation(api.auth.syncUser);
+  const getUserByEmail = useQuery(
+    api.auth.getUserByEmail, 
+    user?.email ? { email: user.email } : 'skip'
+  );
 
   // Check for existing token on mount
   useEffect(() => {
@@ -87,9 +100,76 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   };
 
+  // Sync user with Convex after successful login
+  const syncWithConvex = async (userData: User) => {
+    try {
+      const convexUserId = await syncUserMutation({
+        email: userData.email,
+        firstName: userData.firstName,
+        lastName: userData.lastName,
+      });
+
+      // Update user data with Convex ID
+      const updatedUserData = {
+        ...userData,
+        convexUserId: convexUserId,
+      };
+
+      setUser(updatedUserData);
+      localStorage.setItem('userData', JSON.stringify(updatedUserData));
+      setIsConvexSynced(true);
+    } catch (error) {
+      console.error('Failed to sync with Convex:', error);
+      // Continue without Convex sync - user can still use basic features
+    }
+  };
+
+  // Update user with Convex data once available
+  useEffect(() => {
+    if (getUserByEmail && user && !isConvexSynced) {
+      const convexUser = getUserByEmail;
+      if (convexUser) {
+        const updatedUserData: User = {
+          ...user,
+          convexUserId: convexUser._id,
+          role: convexUser.role,
+          isAdmin: convexUser.role === 'ADMIN' ? 'Yes' : 'No',
+        };
+
+        setUser(updatedUserData);
+        localStorage.setItem('userData', JSON.stringify(updatedUserData));
+        setIsConvexSynced(true);
+      }
+    }
+  }, [getUserByEmail, user, isConvexSynced]);
+
   const login = async (email: string, password: string): Promise<void> => {
     try {
       setIsLoading(true);
+      
+      // Development admin bypass - remove this in production
+      if (email === 'msbaxter@gmail.com' && password === 'admin') {
+        const userData: User = {
+          id: 'admin-dev-user',
+          email: 'msbaxter@gmail.com',
+          firstName: 'Michael',
+          lastName: 'Baxter',
+          isAdmin: 'Yes',
+          role: 'ADMIN',
+        };
+
+        // Store token and user data
+        localStorage.setItem('authToken', 'dev-admin-token');
+        localStorage.setItem('userData', JSON.stringify(userData));
+        
+        setAuthToken('dev-admin-token');
+        setUser(userData);
+        setIsConvexSynced(true);
+        
+        // Sync with Convex
+        await syncWithConvex(userData);
+        return;
+      }
       
       const response = await fetch('https://xtwz-brgd-1r1u.n7c.xano.io/api:8GoBSeHO/auth/login', {
         method: 'POST',
@@ -135,6 +215,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       
       setAuthToken(data.authToken);
       setUser(userData);
+
+      // Sync with Convex in the background
+      await syncWithConvex(userData);
     } catch (error) {
       console.error('Login error:', error);
       throw error;
@@ -151,6 +234,12 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     // Clear state
     setAuthToken(null);
     setUser(null);
+    setIsConvexSynced(false);
+  };
+
+  const checkAdminStatus = (): boolean => {
+    if (!user) return false;
+    return user.isAdmin === 'Yes' || user.role === 'ADMIN';
   };
 
   const value: AuthContextType = {
@@ -158,8 +247,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     authToken,
     isLoading,
     isAuthenticated: !!user && !!authToken,
+    isConvexSynced,
     login,
     logout,
+    checkAdminStatus,
   };
 
   return (

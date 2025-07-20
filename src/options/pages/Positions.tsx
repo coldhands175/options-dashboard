@@ -22,9 +22,8 @@ import Collapse from "@mui/material/Collapse";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import ExpandLessIcon from "@mui/icons-material/ExpandLess";
 import { Trade, Position } from "../models/types";
-import { PositionManager } from "../models/positionManager";
-import { useQuery } from '../../lib/convex';
-import { getCurrentUserId } from '../../lib/convexUtils';
+import { useQuery, api } from '../../lib/convex';
+import { convexPositionToPosition, convexTradeToTrade } from '../../lib/convexUtils';
 
 export default function Positions() {
   const [positions, setPositions] = React.useState<Position[]>([]);
@@ -37,22 +36,59 @@ export default function Positions() {
   const [symbolFilter, setSymbolFilter] = React.useState<string>('All');
   const [expandedRows, setExpandedRows] = React.useState<Set<string>>(new Set());
 
-  const userId = getCurrentUserId();
-  const { data: convexTrades, status } = useQuery('getTrades', userId);
+  // Using global positions and trades data for single-source dashboard
+  const convexPositions = useQuery(api.functions.getAllPositions);
+  const convexTrades = useQuery(api.functions.getAllTrades);
 
   React.useEffect(() => {
-    if (status === 'success' && convexTrades) {
-      const positionManager = new PositionManager(convexTrades);
-      const calculatedPositions = positionManager.getPositions();
-      
-      setPositions(calculatedPositions);
-      setAllPositions(calculatedPositions);
-      setLoading(false);
-    } else if (status === 'error') {
-      setError('Failed to fetch trades and positions');
+    if (convexPositions !== undefined && convexTrades !== undefined) {
+      if (convexPositions && convexPositions.length > 0) {
+        // Convert Convex positions to Position format and manually attach trades
+        const convertedPositions = convexPositions.map(convexPosition => {
+          // Find trades for this position
+          const positionTrades = convexTrades.filter(trade => 
+            trade.positionId === convexPosition.positionKey
+          );
+          const convertedTrades = positionTrades.map(convexTradeToTrade);
+          
+          return {
+            id: convexPosition.positionKey,
+            symbol: convexPosition.symbol,
+            strikePrice: convexPosition.strikePrice,
+            expirationDate: convexPosition.expirationDate,
+            contractType: convexPosition.contractType,
+            strategy: convexPosition.strategy,
+            status: convexPosition.status,
+            openDate: convexPosition.openDate,
+            closeDate: convexPosition.closeDate,
+            trades: convertedTrades,
+            netQuantity: convexPosition.netQuantity,
+            totalPremium: convexPosition.totalPremium,
+            totalCommission: convexPosition.totalCommission,
+            totalFees: convexPosition.totalFees,
+            realizedPL: convexPosition.realizedPL,
+            unrealizedPL: convexPosition.unrealizedPL,
+            daysToExpiration: convexPosition.daysToExpiration,
+          };
+        });
+        
+        setPositions(convertedPositions);
+        setAllPositions(convertedPositions);
+        setError(null);
+      } else {
+        setPositions([]);
+        setAllPositions([]);
+      }
       setLoading(false);
     }
-  }, [status, convexTrades]);
+  }, [convexPositions, convexTrades]);
+
+  // Handle loading state from useQuery
+  React.useEffect(() => {
+    if (convexPositions === undefined || convexTrades === undefined) {
+      setLoading(true);
+    }
+  }, [convexPositions, convexTrades]);
 
   // Filter and sort effect
   React.useEffect(() => {
@@ -148,7 +184,7 @@ export default function Positions() {
           
           {/* Filtering Controls */}
           <Grid container spacing={2} sx={{ mb: 3 }}>
-            <Grid item xs={12} sm={4}>
+            <Grid size={{ xs: 12, sm: 4 }}>
               <FormControl fullWidth size="small">
                 <InputLabel>Filter by Year</InputLabel>
                 <Select
@@ -165,7 +201,7 @@ export default function Positions() {
                 </Select>
               </FormControl>
             </Grid>
-            <Grid item xs={12} sm={4}>
+            <Grid size={{ xs: 12, sm: 4 }}>
               <FormControl fullWidth size="small">
                 <InputLabel>Filter by Symbol</InputLabel>
                 <Select
@@ -182,7 +218,7 @@ export default function Positions() {
                 </Select>
               </FormControl>
             </Grid>
-            <Grid item xs={12} sm={4}>
+            <Grid size={{ xs: 12, sm: 4 }}>
               <Typography variant="body2" color="text.secondary" sx={{ pt: 1 }}>
                 Showing {positions.length} of {allPositions.length} positions
               </Typography>

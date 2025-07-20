@@ -1,6 +1,18 @@
 import { Trade, Position } from "../options/models/types";
 import { Id } from "../../convex/_generated/dataModel";
 
+// Simple hash function to convert string to number
+function hashCode(str: string): number {
+  let hash = 0;
+  if (str.length === 0) return hash;
+  for (let i = 0; i < str.length; i++) {
+    const char = str.charCodeAt(i);
+    hash = ((hash << 5) - hash) + char;
+    hash = hash & hash; // Convert to 32-bit integer
+  }
+  return Math.abs(hash);
+}
+
 // Type definitions for Convex data structures
 export interface ConvexTrade {
   _id: Id<"trades">;
@@ -20,13 +32,6 @@ export interface ConvexTrade {
   fees?: number;
   status: "EXECUTED" | "CANCELLED" | "PENDING";
   notes?: string;
-  impliedVolatility?: number;
-  delta?: number;
-  gamma?: number;
-  theta?: number;
-  vega?: number;
-  createdAt: string;
-  updatedAt: string;
 }
 
 export interface ConvexPosition {
@@ -56,7 +61,7 @@ export interface ConvexPosition {
 // Convert Convex trade to your existing Trade interface
 export function convexTradeToTrade(convexTrade: ConvexTrade): Trade {
   return {
-    id: parseInt(convexTrade._id.replace("trades:", ""), 36), // Convert Convex ID to number for compatibility
+    id: hashCode(convexTrade._id.toString()), // Create a numeric ID from Convex string ID
     positionId: convexTrade.positionId,
     transactionDate: convexTrade.transactionDate,
     tradeType: convexTrade.tradeType,
@@ -71,11 +76,12 @@ export function convexTradeToTrade(convexTrade: ConvexTrade): Trade {
     fees: convexTrade.fees,
     status: convexTrade.status,
     notes: convexTrade.notes,
-    impliedVolatility: convexTrade.impliedVolatility,
-    delta: convexTrade.delta,
-    gamma: convexTrade.gamma,
-    theta: convexTrade.theta,
-    vega: convexTrade.vega,
+    // Optional Greeks (not in simplified schema but keeping for compatibility)
+    impliedVolatility: undefined,
+    delta: undefined,
+    gamma: undefined,
+    theta: undefined,
+    vega: undefined,
   };
 }
 
@@ -104,7 +110,6 @@ export function convexPositionToPosition(convexPosition: ConvexPosition, trades:
 
 // Convert your existing Trade to Convex trade format for migration
 export function convexTradeFromTrade(trade: Trade) {
-  const now = new Date().toISOString();
   return {
     positionId: trade.positionId,
     transactionDate: trade.transactionDate,
@@ -120,13 +125,6 @@ export function convexTradeFromTrade(trade: Trade) {
     fees: trade.fees,
     status: trade.status,
     notes: trade.notes,
-    impliedVolatility: trade.impliedVolatility,
-    delta: trade.delta,
-    gamma: trade.gamma,
-    theta: trade.theta,
-    vega: trade.vega,
-    createdAt: now,
-    updatedAt: now,
   };
 }
 
@@ -148,11 +146,6 @@ export function tradeToConvexInput(trade: Omit<Trade, 'id'>, userId: string) {
     fees: trade.fees,
     status: trade.status,
     notes: trade.notes,
-    impliedVolatility: trade.impliedVolatility,
-    delta: trade.delta,
-    gamma: trade.gamma,
-    theta: trade.theta,
-    vega: trade.vega,
   };
 }
 
@@ -163,26 +156,12 @@ export function generatePositionId(symbol: string, expirationDate: string, strik
 
 // Helper to get current user ID (integrates with existing auth system)
 export function getCurrentUserId(): string {
-  // Get user ID from existing authentication system
-  try {
-    const userData = localStorage.getItem('userData');
-    if (userData) {
-      const user = JSON.parse(userData);
-      // Try different possible user ID field names
-      return user.id || user.userId || user.user_id || user.email || 'default-user';
-    }
-    
-    // Fallback: try getting from auth token or other sources
-    const authToken = localStorage.getItem('authToken');
-    if (authToken) {
-      // For development, create a consistent user ID based on some identifier
-      // In production, this should be properly decoded from your auth system
-      return 'authenticated-user';
-    }
-    
-    return 'default-user';
-  } catch (error) {
-    console.warn('Error getting user ID:', error);
-    return 'default-user';
-  }
+  // For now, always use the migrated user ID since that's where the data is
+  // TODO: Update this once proper authentication is implemented
+  const migratedUserId = 'migrated-user-1752958388313';
+  
+  // Debug log to verify the user ID being used
+  console.log('🔑 getCurrentUserId returning:', migratedUserId);
+  
+  return migratedUserId;
 }
