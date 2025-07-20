@@ -20,45 +20,52 @@ import ArrowDownwardIcon from "@mui/icons-material/ArrowDownward";
 import ArrowUpwardIcon from "@mui/icons-material/ArrowUpward";
 import TableSortLabel from "@mui/material/TableSortLabel"; // Import TableSortLabel
 import { Trade } from "../models/types"; // Ensure Trade interface is correctly imported
-import { xanoApi, XanoApiError } from "../../services/xanoApi";
+import { useQuery, api } from '../../lib/convex';
+import { getCurrentUserId } from '../../lib/convexUtils';
 
 export default function Trades() {
-  const tradesRef = React.useRef<Trade[] | null>(null);
+  const userId = getCurrentUserId();
+  const convexTrades = useQuery(api.functions.getTrades, { userId });
   const [trades, setTrades] = React.useState<Trade[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
 
   React.useEffect(() => {
-    if (tradesRef.current) {
-      setTrades(tradesRef.current);
-      setLoading(false);
-      return;
-    }
-
-    const fetchTrades = async () => {
-      try {
-        const data = await xanoApi.getTransactions();
-        // Ensure the fetched data aligns with the Trade interface
-        tradesRef.current = data as Trade[];
-        setTrades(tradesRef.current);
-      } catch (err) {
-        if (err instanceof XanoApiError && err.code === 'RATE_LIMITED') {
-          setError('Too many requests. Please wait a moment and refresh the page.');
-        } else {
-          setError((err as Error).message);
-        }
-      } finally {
-        setLoading(false);
+    if (convexTrades !== undefined) {
+      if (convexTrades) {
+        // Convert Convex trades to our Trade format
+        const convertedTrades = convexTrades.map(trade => ({
+          id: parseInt(trade._id.replace('trades:', ''), 36),
+          positionId: trade.positionId,
+          transactionDate: trade.transactionDate,
+          tradeType: trade.tradeType,
+          symbol: trade.symbol,
+          contractType: trade.contractType,
+          quantity: trade.quantity,
+          expirationDate: trade.expirationDate,
+          strikePrice: trade.strikePrice,
+          premium: trade.premium,
+          bookCost: trade.bookCost,
+          commission: trade.commission,
+          fees: trade.fees,
+          status: trade.status,
+          notes: trade.notes,
+          impliedVolatility: trade.impliedVolatility,
+          delta: trade.delta,
+          gamma: trade.gamma,
+          theta: trade.theta,
+          vega: trade.vega,
+        }));
+        setTrades(convertedTrades);
       }
-    };
-
-    fetchTrades();
-  }, []);
+      setLoading(false);
+    }
+  }, [convexTrades]);
 
   const [page, setPage] = React.useState(0);
   const [rowsPerPage, setRowsPerPage] = React.useState(10);
   const [statusFilter, setStatusFilter] = React.useState("all");
-  const [orderBy, setOrderBy] = React.useState<keyof Trade>('Transaction_Date');
+  const [orderBy, setOrderBy] = React.useState<keyof Trade>('transactionDate');
   const [order, setOrder] = React.useState<'asc' | 'desc'>('desc');
   const [symbolFilter, setSymbolFilter] = React.useState('');
 
@@ -95,33 +102,26 @@ export default function Trades() {
     const aValue = a[orderBy];
     const bValue = b[orderBy];
 
-    // Handle undefined or null values for sorting
     if (bValue === undefined || bValue === null) return -1;
     if (aValue === undefined || aValue === null) return 1;
 
-    // Ensure values are comparable (e.g., convert to string for string comparison)
     const comparableA = typeof aValue === 'string' ? aValue.toLowerCase() : aValue;
     const comparableB = typeof bValue === 'string' ? bValue.toLowerCase() : bValue;
 
-    if (comparableB < comparableA) {
-      return -1;
-    }
-    if (comparableB > comparableA) {
-      return 1;
-    }
+    if (comparableB < comparableA) return -1;
+    if (comparableB > comparableA) return 1;
     return 0;
   };
 
-  // Filter trades based on status and symbol filters
   const filteredTrades = React.useMemo(() => {
     let filtered = trades;
 
     if (statusFilter !== "all") {
-      filtered = filtered.filter(trade => (trade.status || '').toLowerCase() === statusFilter);
+      filtered = filtered.filter(trade => trade.status.toLowerCase() === statusFilter);
     }
 
     if (symbolFilter) {
-      filtered = filtered.filter(trade => (typeof trade.Symbol === 'string' ? trade.Symbol.toLowerCase() : '') === symbolFilter.toLowerCase());
+      filtered = filtered.filter(trade => trade.symbol.toLowerCase() === symbolFilter.toLowerCase());
     }
 
     return stableSort(filtered, getComparator(order, orderBy));
@@ -158,9 +158,7 @@ export default function Trades() {
 
   return (
     <Box sx={{ width: "100%", maxWidth: { sm: "100%", md: "1700px" } }}>
-      {/* Replaced Grid container with Box */}
       <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-        {/* Replaced Grid item with Box */}
         <Box>
           <Box sx={{ display: "flex", justifyContent: "space-between", mb: 2 }}>
             <Typography variant="h5" component="h2">
@@ -175,9 +173,10 @@ export default function Trades() {
                   onChange={handleStatusFilterChange}
                   label="Status"
                 >
-                  <MenuItem value="all">All Trades</MenuItem>
-                  <MenuItem value="open">Open</MenuItem>
-                  <MenuItem value="closed">Closed</MenuItem>
+                  <MenuItem value="all">All</MenuItem>
+                  <MenuItem value="executed">Executed</MenuItem>
+                  <MenuItem value="pending">Pending</MenuItem>
+                  <MenuItem value="cancelled">Cancelled</MenuItem>
                 </Select>
               </FormControl>
               <FormControl variant="outlined" size="small" sx={{ minWidth: 120 }}>
@@ -189,7 +188,7 @@ export default function Trades() {
                   label="Symbol"
                 >
                   <MenuItem value="">All Symbols</MenuItem>
-                  {Array.from(new Set(trades.map(trade => trade.Symbol))).map(symbol => (
+                  {Array.from(new Set(trades.map(trade => trade.symbol))).map(symbol => (
                     <MenuItem key={symbol} value={symbol}>{symbol}</MenuItem>
                   ))}
                 </Select>
@@ -201,20 +200,20 @@ export default function Trades() {
             <Table sx={{ minWidth: 650 }} aria-label="trades history table">
               <TableHead>
                 <TableRow>
-                  <TableCell sortDirection={orderBy === 'Transaction_Date' ? order : false}>
+                  <TableCell sortDirection={orderBy === 'transactionDate' ? order : false}>
                     <TableSortLabel
-                      active={orderBy === 'Transaction_Date'}
-                      direction={orderBy === 'Transaction_Date' ? order : 'asc'}
-                      onClick={() => handleRequestSort('Transaction_Date')}
+                      active={orderBy === 'transactionDate'}
+                      direction={orderBy === 'transactionDate' ? order : 'asc'}
+                      onClick={() => handleRequestSort('transactionDate')}
                     >
                       Transaction Date
                     </TableSortLabel>
                   </TableCell>
-                  <TableCell sortDirection={orderBy === 'Symbol' ? order : false}>
+                  <TableCell sortDirection={orderBy === 'symbol' ? order : false}>
                     <TableSortLabel
-                      active={orderBy === 'Symbol'}
-                      direction={orderBy === 'Symbol' ? order : 'asc'}
-                      onClick={() => handleRequestSort('Symbol')}
+                      active={orderBy === 'symbol'}
+                      direction={orderBy === 'symbol' ? order : 'asc'}
+                      onClick={() => handleRequestSort('symbol')}
                     >
                       Symbol
                     </TableSortLabel>
@@ -222,56 +221,52 @@ export default function Trades() {
                   <TableCell>Contract Type</TableCell>
                   <TableCell>Trade Type</TableCell>
                   <TableCell>Strike Price</TableCell>
-                  <TableCell sortDirection={orderBy === 'StrikeDate' ? order : false}>
+                  <TableCell sortDirection={orderBy === 'expirationDate' ? order : false}>
                     <TableSortLabel
-                      active={orderBy === 'StrikeDate'}
-                      direction={orderBy === 'StrikeDate' ? order : 'asc'}
-                      onClick={() => handleRequestSort('StrikeDate')}
+                      active={orderBy === 'expirationDate'}
+                      direction={orderBy === 'expirationDate' ? order : 'asc'}
+                      onClick={() => handleRequestSort('expirationDate')}
                     >
-                      Strike Date
+                      Expiration Date
                     </TableSortLabel>
                   </TableCell>
                   <TableCell>Quantity</TableCell>
-                  <TableCell align="right">Premium Value</TableCell>
-                  <TableCell align="right">Book Value</TableCell>
+                  <TableCell align="right">Premium</TableCell>
+                  <TableCell align="right">Book Cost</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
                 {filteredTrades
                   .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
                   .map((trade) => (
-                    <TableRow key={trade.id}><TableCell component="th" scope="row">
-                        {trade.Transaction_Date || 'N/A'} {/* Use Transaction_Date */}
-                      </TableCell><TableCell>
-                        <Typography fontWeight="medium">{trade.Symbol || 'N/A'}</Typography> {/* Use Symbol */}
-                      </TableCell><TableCell>{trade.contractType || 'N/A'}</TableCell><TableCell>
+                    <TableRow key={trade.id}>
+                      <TableCell component="th" scope="row">{trade.transactionDate}</TableCell>
+                      <TableCell><Typography fontWeight="medium">{trade.symbol}</Typography></TableCell>
+                      <TableCell>{trade.contractType}</TableCell>
+                      <TableCell>
                         <Typography
-                          color={
-                            (typeof trade.tradeType === 'string' && trade.tradeType.toLowerCase() === "bought") ? "error.main" : "success.main" // Use tradeType
-                          }
-                          sx={{
-                            display: "flex",
-                            alignItems: "center",
-                            fontWeight: "medium"
-                          }}
+                          color={trade.tradeType.startsWith('BUY') ? "error.main" : "success.main"}
+                          sx={{ display: "flex", alignItems: "center", fontWeight: "medium" }}
                         >
-                          {(typeof trade.tradeType === 'string' && trade.tradeType.toLowerCase() === "bought") ? ( // 'Bought' is red down arrow
-                            <ArrowDownwardIcon fontSize="small" sx={{ mr: 0.5, color: 'error.main' }} />
-                          ) : ( // 'Sold' is green up arrow
-                            <ArrowUpwardIcon fontSize="small" sx={{ mr: 0.5, color: 'success.main' }} />
+                          {trade.tradeType.startsWith('BUY') ? (
+                            <ArrowDownwardIcon fontSize="small" sx={{ mr: 0.5 }} />
+                          ) : (
+                            <ArrowUpwardIcon fontSize="small" sx={{ mr: 0.5 }} />
                           )}
-                          {trade.tradeType || 'N/A'} {/* Use tradeType */}
+                          {trade.tradeType.replace(/_/g, ' ')}
                         </Typography>
-                      </TableCell><TableCell>${trade.StrikePrice ?? 'N/A'}</TableCell><TableCell>{trade.StrikeDate || 'N/A'}</TableCell><TableCell>{trade.Quantity ?? 'N/A'}</TableCell><TableCell align="right">
-                        <Typography
-                          fontWeight="medium"
-                          color={(trade.PremiumValue !== undefined && trade.PremiumValue !== null && trade.PremiumValue > 0) ? "success.main" : "error.main"} // Use PremiumValue
-                        >
-                          ${(typeof trade.PremiumValue === 'number' ? trade.PremiumValue : 0).toFixed(2)} {/* Removed '+' sign */}
+                      </TableCell>
+                      <TableCell>${trade.strikePrice.toFixed(2)}</TableCell>
+                      <TableCell>{trade.expirationDate}</TableCell>
+                      <TableCell>{trade.quantity}</TableCell>
+                      <TableCell align="right">
+                        <Typography fontWeight="medium" color={trade.premium > 0 ? "success.main" : "error.main"}>
+                          ${trade.premium.toFixed(2)}
                         </Typography>
-                      </TableCell><TableCell align="right">
+                      </TableCell>
+                      <TableCell align="right">
                         <Typography fontWeight="medium">
-                          {(typeof trade.Book_Cost === 'number' && trade.Book_Cost < 0 ? '-' : '')}${(typeof trade.Book_Cost === 'number' ? Math.abs(trade.Book_Cost) : 0).toFixed(2)} {/* Display Book_Cost with negative sign before $ */}
+                          {trade.bookCost < 0 ? '-' : ''}${Math.abs(trade.bookCost).toFixed(2)}
                         </Typography>
                       </TableCell>
                     </TableRow>

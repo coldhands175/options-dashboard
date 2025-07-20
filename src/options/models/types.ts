@@ -7,38 +7,63 @@
  */
 export interface Trade {
   id: number;
-  Transaction_Date: string; // Date the trade was executed (YYYY-MM-DD)
-  tradeType: string;        // Type of trade (e.g., 'Buy', 'Sell')
-  Symbol: string;           // Stock symbol
-  contractType: string;     // Contract type (e.g., 'PUT', 'CALL')
-  Quantity: number;         // Number of contracts
-  StrikeDate: string;       // Strike date (YYYY-MM-DD)
-  StrikePrice: number;      // Strike price
-  PremiumValue: number;     // Premium received/paid per contract
-  Book_Cost: number;        // Book cost of the trade
-  Security_Number?: string; // Optional security number
-  status: string;           // Status of the trade (e.g., 'Open', 'Closed')
-  profitLoss?: number;      // Profit/Loss for closed trades
   positionId?: string;      // ID of the position this trade belongs to
+  transactionDate: string;  // Date the trade was executed (YYYY-MM-DD)
+  tradeType: 'BUY_TO_OPEN' | 'SELL_TO_OPEN' | 'BUY_TO_CLOSE' | 'SELL_TO_CLOSE' | 'ASSIGNMENT' | 'EXPIRATION';
+  symbol: string;           // Underlying stock symbol
+  contractType: 'CALL' | 'PUT';
+  quantity: number;         // Number of contracts (positive for buy, negative for sell)
+  expirationDate: string;   // Option expiration date (YYYY-MM-DD)
+  strikePrice: number;      // Strike price
+  premium: number;          // Premium received/paid per contract (always positive)
+  bookCost: number;         // Total cost/proceeds of the trade (quantity * premium * 100 + commission)
+  commission?: number;      // Trading commission for this leg
+  fees?: number;            // Other fees (e.g., regulatory fees)
+  status: 'EXECUTED' | 'CANCELLED' | 'PENDING'; // Status of the individual trade transaction
+  notes?: string;           // User-provided notes for the trade
+
+  // Optional market data at the time of trade for advanced analysis
+  impliedVolatility?: number;
+  delta?: number;
+  gamma?: number;
+  theta?: number;
+  vega?: number;
 }
 
 /**
  * Represents an options position (collection of related trades)
  */
-export interface Position {
-  id: string;                 // Unique identifier
-  ticker: string;             // Stock symbol
-  strike: number;             // Strike price 
-  expiration: string;         // Option expiration date (YYYY-MM-DD)
-  type: string;               // Strategy type (Covered Call, CSP, etc.)
-  status: 'Open' | 'Closed' | 'Expired';  // Position status
-  openDate: string;           // Date position was opened
-  closeDate?: string;         // Date position was closed (if closed)
-  trades: number[];           // References to component trade IDs
-  currentQuantity: number;    // Current size of position (0 if closed)
-  totalSalesBookCost: number; // Accumulation of absolute book costs from 'sell' trades
-  totalPurchasesBookCost: number; // Accumulation of absolute book costs from 'buy' trades
+/**
+ * Defines the types of options strategies
+ */
+export type Strategy =
+  | 'SINGLE_LEG'
+  | 'COVERED_CALL'
+  | 'CASH_SECURED_PUT'
+  | 'VERTICAL_SPREAD'
+  | 'IRON_CONDOR';
 
+/**
+ * Represents an options position (collection of related trades)
+ */
+export interface Position {
+  id: string;                 // Unique identifier for the position (e.g., 'AAPL-2025-01-17-200-CALL')
+  symbol: string;             // Underlying stock symbol
+  strikePrice: number;      // Strike price of the option
+  expirationDate: string;   // Expiration date of the option (YYYY-MM-DD)
+  contractType: 'CALL' | 'PUT'; // Type of option contract
+  strategy: Strategy;           // Strategy name (e.g., 'Covered Call', 'Cash-Secured Put', 'Iron Condor')
+  status: 'OPEN' | 'CLOSED' | 'EXPIRED' | 'ASSIGNED';
+  openDate: string;           // Date position was opened (YYYY-MM-DD)
+  closeDate?: string;         // Date position was closed (if applicable)
+  trades: Trade[];            // Array of all trades constituting this position
+  netQuantity: number;        // Current number of contracts held (e.g., +1 for long, -1 for short)
+  totalPremium: number;       // Net premium received (positive) or paid (negative)
+  totalCommission: number;    // Total commissions paid
+  totalFees: number;          // Total fees paid
+  realizedPL?: number;        // Realized Profit/Loss (for closed positions)
+  unrealizedPL?: number;      // Unrealized Profit/Loss (for open positions, requires market data)
+  daysToExpiration?: number;  // Days until the option expires (for open positions)
 }
 
 /**

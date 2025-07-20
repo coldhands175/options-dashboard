@@ -23,120 +23,36 @@ import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import ExpandLessIcon from "@mui/icons-material/ExpandLess";
 import { Trade, Position } from "../models/types";
 import { PositionManager } from "../models/positionManager";
-import { xanoApi } from "../../services/xanoApi";
+import { useQuery } from '../../lib/convex';
+import { getCurrentUserId } from '../../lib/convexUtils';
 
 export default function Positions() {
-  const tradesRef = React.useRef<Trade[] | null>(null);
   const [positions, setPositions] = React.useState<Position[]>([]);
   const [allPositions, setAllPositions] = React.useState<Position[]>([]);
   const [loading, setLoading] = React.useState<boolean>(true);
   const [error, setError] = React.useState<string | null>(null);
-  const [sortBy, setSortBy] = React.useState<keyof Position>('ticker');
+  const [sortBy, setSortBy] = React.useState<keyof Position>('symbol');
   const [sortOrder, setSortOrder] = React.useState<'asc' | 'desc'>('asc');
   const [yearFilter, setYearFilter] = React.useState<string>('All');
   const [symbolFilter, setSymbolFilter] = React.useState<string>('All');
   const [expandedRows, setExpandedRows] = React.useState<Set<string>>(new Set());
-  const [allTrades, setAllTrades] = React.useState<Trade[]>([]);
+
+  const userId = getCurrentUserId();
+  const { data: convexTrades, status } = useQuery('getTrades', userId);
 
   React.useEffect(() => {
-    if (tradesRef.current) {
-      const positionManager = new PositionManager(tradesRef.current);
+    if (status === 'success' && convexTrades) {
+      const positionManager = new PositionManager(convexTrades);
       const calculatedPositions = positionManager.getPositions();
+      
       setPositions(calculatedPositions);
       setAllPositions(calculatedPositions);
-      setAllTrades(tradesRef.current);
       setLoading(false);
-      return;
+    } else if (status === 'error') {
+      setError('Failed to fetch trades and positions');
+      setLoading(false);
     }
-
-    const fetchPositions = async () => {
-      try {
-        const data = await xanoApi.getTransactions();
-        tradesRef.current = data as Trade[];
-        const fetchedTrades: Trade[] = tradesRef.current.map((item: any) => {
-          // Normalize trade type: "Sold" -> "sell", "Bought" -> "buy"
-          let normalizedTradeType = 'other';
-          if (item.tradeType) {
-            const tradeTypeLower = item.tradeType.toLowerCase();
-            if (tradeTypeLower.includes('sold') || tradeTypeLower.includes('sell')) {
-              normalizedTradeType = 'sell';
-            } else if (tradeTypeLower.includes('bought') || tradeTypeLower.includes('buy')) {
-              normalizedTradeType = 'buy';
-            }
-          }
-          
-          // Normalize status: "Open" -> "open", "Closed" -> "close"
-          let normalizedStatus = 'open';
-          if (item.status) {
-            const statusLower = item.status.toLowerCase();
-            if (statusLower.includes('close')) {
-              normalizedStatus = 'close';
-            } else if (statusLower.includes('open')) {
-              normalizedStatus = 'open';
-            }
-          }
-          
-          const mappedItem: Trade = {
-            id: item.id,
-            Transaction_Date: item.Transaction_Date,
-            tradeType: normalizedTradeType,
-            Symbol: item.Symbol,
-            contractType: item.contractType,
-            Quantity: Number(item.Quantity) || 0,
-            StrikeDate: item.StrikeDate ?? '',
-            StrikePrice: Number(item.StrikePrice) || 0,
-            PremiumValue: Number(item.PremiumValue) || 0,
-            Book_Cost: Number(item.Book_Cost) || 0,
-            Security_Number: item.Security_Number,
-            status: normalizedStatus,
-          };
-          return mappedItem;
-        });
-
-        console.log('Fetched trades for position manager:', fetchedTrades.length, 'trades');
-        if (fetchedTrades.length > 0) {
-          console.log('First trade sample:', {
-            id: fetchedTrades[0].id,
-            tradeType: fetchedTrades[0].tradeType,
-            status: fetchedTrades[0].status,
-            Symbol: fetchedTrades[0].Symbol,
-            PremiumValue: fetchedTrades[0].PremiumValue,
-            Book_Cost: fetchedTrades[0].Book_Cost
-          });
-        }
-        
-        const positionManager = new PositionManager(fetchedTrades);
-        const calculatedPositions = positionManager.getPositions();
-        
-        console.log('Calculated positions:', calculatedPositions);
-        calculatedPositions.forEach((pos, index) => {
-          if (index < 5) { // Log first 5 positions to avoid console spam
-            console.log(`Position ${index + 1}:`, {
-              id: pos.id,
-              ticker: pos.ticker,
-              type: pos.type,
-              status: pos.status,
-              expiration: pos.expiration,
-              totalSales: pos.totalSalesBookCost,
-              totalPurchases: pos.totalPurchasesBookCost,
-              pnl: pos.totalSalesBookCost - pos.totalPurchasesBookCost,
-              trades: pos.trades
-            });
-          }
-        });
-        
-        setPositions(calculatedPositions);
-        setAllPositions(calculatedPositions);
-        setAllTrades(fetchedTrades);
-      } catch (err) {
-        setError((err as Error).message);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchPositions();
-  }, []);
+  }, [status, convexTrades]);
 
   // Filter and sort effect
   React.useEffect(() => {
@@ -145,14 +61,14 @@ export default function Positions() {
     // Apply year filter
     if (yearFilter !== 'All') {
       filteredPositions = filteredPositions.filter((position) =>
-        position.expiration.startsWith(yearFilter)
+        position.expirationDate.startsWith(yearFilter)
       );
     }
 
     // Apply symbol filter
     if (symbolFilter !== 'All') {
       filteredPositions = filteredPositions.filter((position) =>
-        position.ticker === symbolFilter
+        position.symbol === symbolFilter
       );
     }
 
@@ -189,11 +105,11 @@ export default function Positions() {
   };
 
   const uniqueYears = React.useMemo(() => {
-    return Array.from(new Set(allPositions.map((p) => p.expiration.slice(0, 4)))).sort();
+    return Array.from(new Set(allPositions.map((p) => p.expirationDate.slice(0, 4)))).sort();
   }, [allPositions]);
   
   const symbols = React.useMemo(() => {
-    return Array.from(new Set(allPositions.map((p) => p.ticker))).sort();
+    return Array.from(new Set(allPositions.map((p) => p.symbol))).sort();
   }, [allPositions]);
 
   const handleRowExpand = (positionId: string) => {
@@ -204,10 +120,6 @@ export default function Positions() {
       newExpandedRows.add(positionId);
     }
     setExpandedRows(newExpandedRows);
-  };
-
-  const getTradesForPosition = (position: Position): Trade[] => {
-    return allTrades.filter(trade => position.trades.includes(trade.id));
   };
 
   if (loading) {
@@ -284,36 +196,36 @@ export default function Positions() {
                   <TableCell width={50}></TableCell>
                   <TableCell>
                     <TableSortLabel
-                      active={sortBy === 'ticker'}
-                      direction={sortBy === 'ticker' ? sortOrder : 'asc'}
-                      onClick={() => handleSort('ticker')}
+                      active={sortBy === 'symbol'}
+                      direction={sortBy === 'symbol' ? sortOrder : 'asc'}
+                      onClick={() => handleSort('symbol')}
                     >
-                      Ticker
+                      Symbol
                     </TableSortLabel>
                   </TableCell>
                   <TableCell>
                     <TableSortLabel
-                      active={sortBy === 'type'}
-                      direction={sortBy === 'type' ? sortOrder : 'asc'}
-                      onClick={() => handleSort('type')}
+                      active={sortBy === 'strategy'}
+                      direction={sortBy === 'strategy' ? sortOrder : 'asc'}
+                      onClick={() => handleSort('strategy')}
                     >
                       Strategy
                     </TableSortLabel>
                   </TableCell>
                   <TableCell>
                     <TableSortLabel
-                      active={sortBy === 'strike'}
-                      direction={sortBy === 'strike' ? sortOrder : 'asc'}
-                      onClick={() => handleSort('strike')}
+                      active={sortBy === 'strikePrice'}
+                      direction={sortBy === 'strikePrice' ? sortOrder : 'asc'}
+                      onClick={() => handleSort('strikePrice')}
                     >
                       Strike
                     </TableSortLabel>
                   </TableCell>
                   <TableCell>
                     <TableSortLabel
-                      active={sortBy === 'expiration'}
-                      direction={sortBy === 'expiration' ? sortOrder : 'asc'}
-                      onClick={() => handleSort('expiration')}
+                      active={sortBy === 'expirationDate'}
+                      direction={sortBy === 'expirationDate' ? sortOrder : 'asc'}
+                      onClick={() => handleSort('expirationDate')}
                     >
                       Expiration
                     </TableSortLabel>
@@ -329,9 +241,9 @@ export default function Positions() {
                   </TableCell>
                   <TableCell>
                     <TableSortLabel
-                      active={sortBy === 'currentQuantity'}
-                      direction={sortBy === 'currentQuantity' ? sortOrder : 'asc'}
-                      onClick={() => handleSort('currentQuantity')}
+                      active={sortBy === 'netQuantity'}
+                      direction={sortBy === 'netQuantity' ? sortOrder : 'asc'}
+                      onClick={() => handleSort('netQuantity')}
                     >
                       Quantity
                     </TableSortLabel>
@@ -350,10 +262,10 @@ export default function Positions() {
               </TableHead>
               <TableBody>
                 {positions.map((position) => {
-                  const positionTrades = getTradesForPosition(position);
                   const isExpanded = expandedRows.has(position.id);
-                  const hasMultipleTrades = positionTrades.length > 1;
-                  
+                  const hasMultipleTrades = position.trades.length > 1;
+                  const realizedPL = position.realizedPL ?? 0;
+
                   return (
                     <React.Fragment key={position.id}>
                       <TableRow>
@@ -369,19 +281,19 @@ export default function Positions() {
                           ) : null}
                         </TableCell>
                         <TableCell>
-                          <Typography fontWeight="medium">{position.ticker}</Typography>
+                          <Typography fontWeight="medium">{position.symbol}</Typography>
                         </TableCell>
-                        <TableCell>{position.type}</TableCell>
-                        <TableCell>${position.strike ?? 'N/A'}</TableCell>
-                        <TableCell>{position.expiration || 'N/A'}</TableCell>
+                        <TableCell>{position.strategy}</TableCell>
+                        <TableCell>${position.strikePrice?.toFixed(2) ?? 'N/A'}</TableCell>
+                        <TableCell>{position.expirationDate || 'N/A'}</TableCell>
                         <TableCell>{position.openDate || 'N/A'}</TableCell>
-                        <TableCell>{position.currentQuantity ?? 'N/A'}</TableCell>
+                        <TableCell>{position.netQuantity ?? 'N/A'}</TableCell>
                         <TableCell align="right">
                           <Typography
                             fontWeight="medium"
-                            color={(position.totalSalesBookCost - position.totalPurchasesBookCost) >= 0 ? "success.main" : "error.main"}
+                            color={realizedPL >= 0 ? "success.main" : "error.main"}
                           >
-                            {(position.totalSalesBookCost - position.totalPurchasesBookCost) >= 0 ? "+" : ""}${(position.totalSalesBookCost - position.totalPurchasesBookCost).toFixed(2)}
+                            {realizedPL >= 0 ? "+" : ""}${realizedPL.toFixed(2)}
                           </Typography>
                         </TableCell>
                         <TableCell>
@@ -389,71 +301,50 @@ export default function Positions() {
                             label={position.status}
                             size="small"
                             color={
-                              position.status === "Open" 
+                              position.status === "OPEN" 
                                 ? "primary" 
-                                : position.status === "Expired" 
+                                : position.status === "EXPIRED" 
                                 ? "warning" 
                                 : "default"
                             }
                             sx={{
-                              backgroundColor: position.status === "Expired" ? "warning.light" : undefined,
-                              color: position.status === "Expired" ? "warning.contrastText" : undefined,
+                              backgroundColor: position.status === "EXPIRED" ? "warning.light" : undefined,
+                              color: position.status === "EXPIRED" ? "warning.contrastText" : undefined,
                             }}
                           />
                         </TableCell>
                       </TableRow>
-                      
-                      {/* Expandable trade details row */}
-                      {hasMultipleTrades && (
-                        <TableRow>
-                          <TableCell style={{ paddingBottom: 0, paddingTop: 0 }} colSpan={9}>
-                            <Collapse in={isExpanded} timeout="auto" unmountOnExit>
-                              <Box sx={{ margin: 1 }}>
-                                <Typography variant="h6" gutterBottom component="div">
-                                  Trade Details ({positionTrades.length} trades)
-                                </Typography>
-                                <Table size="small" aria-label="trade details">
-                                  <TableHead>
-                                    <TableRow>
-                                      <TableCell>Date</TableCell>
-                                      <TableCell>Type</TableCell>
-                                      <TableCell>Quantity</TableCell>
-                                      <TableCell>Premium</TableCell>
-                                      <TableCell>Book Cost</TableCell>
-                                      <TableCell>Status</TableCell>
-                                    </TableRow>
-                                  </TableHead>
-                                  <TableBody>
-                                    {positionTrades.map((trade) => (
-                                      <TableRow key={trade.id}>
-                                        <TableCell>{trade.Transaction_Date}</TableCell>
-                                        <TableCell>
-                                          <Typography
-                                            variant="body2"
-                                            color={trade.tradeType === 'sell' ? 'success.main' : trade.tradeType === 'buy' ? 'error.main' : 'text.primary'}
-                                          >
-                                            {trade.tradeType.toUpperCase()}
-                                          </Typography>
-                                        </TableCell>
-                                        <TableCell>{trade.Quantity}</TableCell>
-                                        <TableCell>${trade.PremiumValue.toFixed(2)}</TableCell>
-                                        <TableCell>${trade.Book_Cost.toFixed(2)}</TableCell>
-                                        <TableCell>
-                                          <Chip
-                                            label={trade.status}
-                                            size="small"
-                                            variant="outlined"
-                                          />
-                                        </TableCell>
-                                      </TableRow>
-                                    ))}
-                                  </TableBody>
-                                </Table>
-                              </Box>
-                            </Collapse>
-                          </TableCell>
-                        </TableRow>
-                      )}
+                      <Collapse in={isExpanded} timeout="auto" unmountOnExit>
+                        <Box sx={{ margin: 1 }}>
+                          <Typography variant="h6" gutterBottom component="div">
+                            Trades
+                          </Typography>
+                          <Table size="small" aria-label="trades">
+                            <TableHead>
+                              <TableRow>
+                                <TableCell>Date</TableCell>
+                                <TableCell>Type</TableCell>
+                                <TableCell>Quantity</TableCell>
+                                <TableCell align="right">Premium</TableCell>
+                                <TableCell align="right">Fees</TableCell>
+                                <TableCell align="right">Total Cost</TableCell>
+                              </TableRow>
+                            </TableHead>
+                            <TableBody>
+                              {position.trades.map((trade) => (
+                                <TableRow key={trade.id}>
+                                  <TableCell>{trade.transactionDate}</TableCell>
+                                  <TableCell>{trade.tradeType}</TableCell>
+                                  <TableCell>{trade.quantity}</TableCell>
+                                  <TableCell align="right">${trade.premium.toFixed(2)}</TableCell>
+                                  <TableCell align="right">${(trade.fees ?? 0).toFixed(2)}</TableCell>
+                                  <TableCell align="right">${trade.bookCost.toFixed(2)}</TableCell>
+                                </TableRow>
+                              ))}
+                            </TableBody>
+                          </Table>
+                        </Box>
+                      </Collapse>
                     </React.Fragment>
                   );
                 })}

@@ -1,26 +1,97 @@
 /* TradingView Widget Theme Overrides */
 
+/* CSS Custom Properties for Theme Variables */
+:root {
+  /* Light theme variables */
+  --tradingview-bg-light: transparent;
+  --tradingview-surface-light: rgba(255, 255, 255, 0.02);
+  --tradingview-border-light: rgba(0, 0, 0, 0.12);
+  
+  /* Dark theme variables */
+  --tradingview-bg-dark: transparent;
+  --tradingview-surface-dark: rgba(255, 255, 255, 0.02);
+  --tradingview-border-dark: rgba(255, 255, 255, 0.12);
+}
+
+/* Light theme overrides */
+[data-mui-color-scheme="light"] .tradingview-widget-container {
+  --tradingview-bg: var(--tradingview-bg-light);
+  --tradingview-surface: var(--tradingview-surface-light);
+  --tradingview-border: var(--tradingview-border-light);
+}
+
+/* Dark theme overrides */
+[data-mui-color-scheme="dark"] .tradingview-widget-container {
+  --tradingview-bg: var(--tradingview-bg-dark);
+  --tradingview-surface: var(--tradingview-surface-dark);
+  --tradingview-border: var(--tradingview-border-dark);
+}
+
 /* Hide copyright for cleaner look */
 .tradingview-widget-copyright {
   display: none !important;
+}
+
+/* Base widget container styling */
+.tradingview-widget-container {
+  background-color: var(--tradingview-bg, transparent) !important;
+  background: var(--tradingview-bg, transparent) !important;
+  border-radius: 8px;
+  transition: all 0.3s ease-in-out;
+  position: relative;
+  overflow: hidden;
 }
 
 /* Force all TradingView widget backgrounds to be transparent */
 .tradingview-widget-container,
 .tradingview-widget-container__widget,
 .tradingview-widget-container iframe {
-  background-color: transparent !important;
-  background: transparent !important;
+  background-color: var(--tradingview-bg, transparent) !important;
+  background: var(--tradingview-bg, transparent) !important;
+  border: none !important;
+  outline: none !important;
+}
+
+/* Target iframe content when accessible */
+.tradingview-widget-container iframe[src*="tradingview"] {
+  background-color: var(--tradingview-bg, transparent) !important;
+  background: var(--tradingview-bg, transparent) !important;
+  border-radius: inherit;
+  transition: opacity 0.3s ease-in-out;
 }
 
 /* Additional targeting for stubborn elements */
 .tradingview-widget-container *:not(span):not(div[style*="color"]) {
-  background-color: transparent !important;
+  background-color: var(--tradingview-bg, transparent) !important;
 }
 
 /* Target any inline styles that might override */
 .tradingview-widget-container [style*="background-color"],
 .tradingview-widget-container [style*="background:"] {
-  background-color: transparent !important;
-  background: transparent !important;
+  background-color: var(--tradingview-bg, transparent) !important;
+  background: var(--tradingview-bg, transparent) !important;
+}
+
+/* Ensure proper z-index stacking */
+.tradingview-widget-container {
+  z-index: 1;
+}
+
+.tradingview-widget-container iframe {
+  z-index: 2;
+}
+
+/* Mobile responsiveness */
+@media (max-width: 768px) {
+  .tradingview-widget-container {
+    border-radius: 6px;
+  }
+}
+
+/* Reduced motion accessibility */
+@media (prefers-reduced-motion: reduce) {
+  .tradingview-widget-container,
+  .tradingview-widget-container iframe {
+    transition: none;
+  }
 }

@@ -9,6 +9,8 @@ import AuthenticatedSignIn from "./components/AuthenticatedSignIn";
 import ProtectedRoute from "./components/ProtectedRoute";
 import ResetPassword from "./components/ResetPassword";
 import { AuthProvider } from "./context/AuthContext";
+import { ConvexProvider } from "./lib/convex";
+// Note: convex.tsx renamed from convex.ts to support JSX
 import './tradingview-overrides.css';
 
 
@@ -36,30 +38,32 @@ function NotFound() {
 export default function App() {
   return (
     <BrowserRouter>
-      <AuthProvider>
-        <CssBaseline enableColorScheme />
-        <Routes>
-          <Route path="/login" element={<AuthenticatedSignIn />} />
-          <Route path="/reset-password" element={<ResetPassword />} />
-          <Route
-            path="/*" 
-            element={
-              <ProtectedRoute>
-                <OptionsDashboard />
-              </ProtectedRoute>
-            } 
-          />
-          <Route 
-            path="/crm/*" 
-            element={
-              <ProtectedRoute>
-                <CrmDashboard />
-              </ProtectedRoute>
-            } 
-          />
-          <Route path="*" element={<NotFound />} />
-        </Routes>
-      </AuthProvider>
+      <ConvexProvider>
+        <AuthProvider>
+          <CssBaseline enableColorScheme />
+          <Routes>
+            <Route path="/login" element={<AuthenticatedSignIn />} />
+            <Route path="/reset-password" element={<ResetPassword />} />
+            <Route
+              path="/*" 
+              element={
+                <ProtectedRoute>
+                  <OptionsDashboard />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/crm/*" 
+              element={
+                <ProtectedRoute>
+                  <CrmDashboard />
+                </ProtectedRoute>
+              } 
+            />
+            <Route path="*" element={<NotFound />} />
+          </Routes>
+        </AuthProvider>
+      </ConvexProvider>
     </BrowserRouter>
   );
 }
