@@ -26,8 +26,17 @@ const TradingViewWidget: React.FC<TradingViewWidgetProps> = ({
   const theme = useTheme();
   
   // Automatically detect theme if not explicitly provided
-  const effectiveColorTheme = colorTheme || (theme.palette.mode === 'dark' ? 'dark' : 'light');
+  const effectiveColorTheme = colorTheme || theme.palette.mode;
   
+  // Debug theme detection
+  React.useEffect(() => {
+    console.log('TradingView Widget Theme Debug:', {
+      colorTheme,
+      'theme.palette.mode': theme.palette.mode,
+      effectiveColorTheme,
+      widgetWillReinitialize: true,
+    });
+  }, [colorTheme, theme.palette.mode, effectiveColorTheme]);
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -64,54 +73,25 @@ const TradingViewWidget: React.FC<TradingViewWidgetProps> = ({
         
         const widgetConfig = {
           symbols,
-          colorTheme: effectiveColorTheme,
-          locale,
-          largeChartUrl: "",
-          isTransparent: false, // Don't use transparent, use solid color
           showSymbolLogo,
-          displayMode
+          displayMode,
+          locale,
+          colorTheme: effectiveColorTheme,
+          isTransparent: true,
+          largeChartUrl: "",
         };
-        
+
+        console.log('TradingView Widget Config:', JSON.stringify(widgetConfig, null, 2));
         script.innerHTML = JSON.stringify(widgetConfig);
 
-        // Add error handling for script loading
         script.onerror = (error) => {
           console.warn('TradingView widget failed to load:', error);
+          if (containerRef.current) {
+            containerRef.current.innerHTML = '<p>Error loading widget.</p>';
+          }
         };
 
         container.appendChild(script);
-        
-        console.log('Initialized script and appending to container');
-        // Add iframe monitoring to override background after load
-        const checkForIframe = () => {
-          const iframe = container.querySelector('iframe');
-          if (iframe) {
-            console.log('Iframe found, attempting to override styles');
-            console.log('Iframe original styles:', iframe.style);
-            iframe.style.backgroundColor = 'transparent';
-            iframe.style.background = 'transparent';
-            
-            // Try to access iframe content if same-origin (won't work for cross-origin)
-            try {
-              if (iframe.contentDocument) {
-                const iframeBody = iframe.contentDocument.body;
-                if (iframeBody) {
-                  console.log('Successfully accessed iframe body, overriding styles');
-                  iframeBody.style.backgroundColor = 'transparent';
-                  iframeBody.style.background = 'transparent';
-                }
-              }
-            } catch (e) {
-              console.warn('Cross-origin restriction, unable to access iframe contentDocument', e);
-            }
-          } else {
-            // Keep checking for iframe
-            setTimeout(checkForIframe, 100);
-          }
-        };
-        
-        // Start checking for iframe after script loads
-        setTimeout(checkForIframe, 500);
         
       } catch (error) {
         console.warn('TradingView widget initialization error:', error);

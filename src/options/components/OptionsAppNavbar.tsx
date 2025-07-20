@@ -12,8 +12,7 @@ import AccountCircle from "@mui/icons-material/AccountCircle";
 import NotificationsIcon from "@mui/icons-material/Notifications";
 import MoreIcon from "@mui/icons-material/MoreVert";
 import LogoutIcon from "@mui/icons-material/Logout";
-import { alpha, styled } from "@mui/material/styles";
-import TradingViewWidget from "../../components/TradingViewWidget";
+import { alpha } from "@mui/material/styles";
 import { useAuth } from "../../context/AuthContext";
 import StockSearch, { StockSymbol } from "../../components/StockSearch";
 import { stockApi, StockQuote } from "../../services/stockApi";
@@ -243,7 +242,7 @@ export default function OptionsAppNavbar() {
                   console.log(`✅ Selected ${symbol.ticker} - ${symbol.name}`);
                   // Set anchor element for quote popup - use the search box container
                   const searchContainer = document.querySelector('[data-search-container]') as HTMLElement;
-                  setQuoteAnchorEl(searchContainer || event.currentTarget as HTMLElement);
+                  setQuoteAnchorEl(searchContainer);
                   // Fetch and display quote
                   fetchStockQuote(symbol);
                 }
@@ -288,28 +287,6 @@ export default function OptionsAppNavbar() {
             </IconButton>
           </Box>
         </Toolbar>
-        {/* TradingView Ticker Tape */}
-        <Box
-          sx={{
-            height: '60px',
-            width: '100%',
-            borderTop: (theme) => `1px solid ${
-              theme.palette.mode === 'dark'
-                ? theme.palette.grey[800]
-                : theme.palette.grey[200]
-            }`,
-            backgroundColor: (theme) =>
-              alpha(theme.palette.background.default, 0.72),
-            backdropFilter: 'blur(6px)',
-            WebkitBackdropFilter: 'blur(6px)',
-            // Let TradingView widget handle its own background
-          }}
-        >
-          <TradingViewWidget 
-            displayMode="adaptive"
-            isTransparent={true}
-          />
-        </Box>
       </AppBar>
       
       {/* Stock Quote Popup */}

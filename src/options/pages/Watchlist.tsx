@@ -251,6 +251,7 @@ export default function Watchlist() {
           {/* TradingView Watchlist Widget */}
           <Paper sx={{ p: 0, overflow: 'hidden' }}>
             <TradingViewWatchlist
+              key={`tradingview-watchlist-${watchlistTheme}`}
               symbolsGroups={symbolGroups}
               colorTheme={watchlistTheme}
               height={700}

@@ -9,7 +9,7 @@ import CssBaseline from "@mui/material/CssBaseline";
 import Box from "@mui/material/Box";
 import Stack from "@mui/material/Stack";
 import OptionsAppNavbar from "./components/OptionsAppNavbar";
-import OptionsHeader from "./components/OptionsHeader";
+
 import OptionsSideMenu from "./components/OptionsSideMenu";
 import OptionsMainDashboard from "./components/OptionsMainDashboard";
 import Portfolio from "./pages/Portfolio";
@@ -68,7 +68,7 @@ export default function OptionsDashboard() {
               mt: { xs: 8, md: 15 }, // Increased top margin to account for TradingView widget (64px toolbar + 60px widget)
             }}
           >
-            <OptionsHeader />
+
             <Routes>
               <Route index element={<OptionsMainDashboard />} />
               <Route path="portfolio" element={<Portfolio />} />

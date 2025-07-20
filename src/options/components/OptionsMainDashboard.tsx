@@ -12,88 +12,61 @@ import OptionsRecentTradesTable from "./OptionsRecentTradesTable";
 import OptionsWatchlistTable from "./OptionsWatchlistTable";
 import OptionsPerformanceChart from "./OptionsPerformanceChart";
 import OptionsAllocationChart from "./OptionsAllocationChart";
-import { Trade, Position } from "../models/types";
+import TradingViewWidget from "../../components/TradingViewWidget";
+import { useTheme } from "@mui/material";
+import { getTickerSymbolsFromConfig } from "../../config/symbols";
+import { Trade } from "../models/types";
 import { PositionManager } from "../models/positionManager";
+import { useQuery } from '../../lib/convex';
+import { api } from '../../../convex/_generated/api';
+import { getCurrentUserId } from '../../lib/convexUtils';
 
 // Utility function to get the most recent quarter with actual position data
 const getMostRecentQuarterWithData = (trades: Trade[]) => {
   if (trades.length === 0) return { start: new Date(), end: new Date() };
-  
-  // Create position manager to find closed positions
+
   const positionManager = new PositionManager(trades);
   const allPositions = positionManager.getPositions();
   const closedPositions = allPositions.filter(p => 
-    (p.status === 'Closed' || p.status === 'Expired') && p.closeDate
+    (p.status === 'CLOSED' || p.status === 'EXPIRED') && p.closeDate
   );
-  
+
   if (closedPositions.length === 0) {
-    // If no closed positions, use current quarter
     const currentDate = new Date();
     const year = currentDate.getFullYear();
     const month = currentDate.getMonth();
     
-    if (month >= 0 && month <= 2) {
-      return { start: new Date(year, 0, 1), end: new Date(year, 2, 31) };
-    } else if (month >= 3 && month <= 5) {
-      return { start: new Date(year, 3, 1), end: new Date(year, 5, 30) };
-    } else if (month >= 6 && month <= 8) {
-      return { start: new Date(year, 6, 1), end: new Date(year, 8, 30) };
-    } else {
-      return { start: new Date(year, 9, 1), end: new Date(year, 11, 31) };
-    }
+    if (month <= 2) return { start: new Date(year, 0, 1), end: new Date(year, 2, 31) };
+    if (month <= 5) return { start: new Date(year, 3, 1), end: new Date(year, 5, 30) };
+    if (month <= 8) return { start: new Date(year, 6, 1), end: new Date(year, 8, 30) };
+    return { start: new Date(year, 9, 1), end: new Date(year, 11, 31) };
   }
-  
-  // Find the most recent close date
+
   const latestCloseDate = new Date(Math.max(...closedPositions.map(p => new Date(p.closeDate!).getTime())));
-  
-  // Determine which quarter this date falls into
   const year = latestCloseDate.getFullYear();
-  const month = latestCloseDate.getMonth(); // 0-11
-  
-  let quarterStart: Date;
-  let quarterEnd: Date;
-  
-  if (month >= 0 && month <= 2) { // Q1: Jan-Mar
-    quarterStart = new Date(year, 0, 1);
-    quarterEnd = new Date(year, 2, 31);
-  } else if (month >= 3 && month <= 5) { // Q2: Apr-Jun
-    quarterStart = new Date(year, 3, 1);
-    quarterEnd = new Date(year, 5, 30);
-  } else if (month >= 6 && month <= 8) { // Q3: Jul-Sep
-    quarterStart = new Date(year, 6, 1);
-    quarterEnd = new Date(year, 8, 30);
-  } else { // Q4: Oct-Dec
-    quarterStart = new Date(year, 9, 1);
-    quarterEnd = new Date(year, 11, 31);
-  }
-  
-  return { start: quarterStart, end: quarterEnd };
+  const month = latestCloseDate.getMonth();
+
+  if (month <= 2) return { start: new Date(year, 0, 1), end: new Date(year, 2, 31) };
+  if (month <= 5) return { start: new Date(year, 3, 1), end: new Date(year, 5, 30) };
+  if (month <= 8) return { start: new Date(year, 6, 1), end: new Date(year, 8, 30) };
+  return { start: new Date(year, 9, 1), end: new Date(year, 11, 31) };
 };
 
 // Calculate quarterly P/L from closed positions
 const calculateQuarterlyPL = (trades: Trade[]) => {
   const quarter = getMostRecentQuarterWithData(trades);
-  
-  // Create position manager and get all positions
   const positionManager = new PositionManager(trades);
   const allPositions = positionManager.getPositions();
-  
-  // Find positions that closed in the quarter
+
   const closedPositionsInQuarter = allPositions.filter(position => {
-    if (position.status !== 'Closed' && position.status !== 'Expired') return false;
+    if (position.status !== 'CLOSED' && position.status !== 'EXPIRED') return false;
     if (!position.closeDate) return false;
-    
     const closeDate = new Date(position.closeDate);
     return closeDate >= quarter.start && closeDate <= quarter.end;
   });
-  
-  // Calculate total P/L from these positions
-  const totalPL = closedPositionsInQuarter.reduce((sum, position) => {
-    // P/L = Total Sales - Total Purchases (what we received minus what we paid)
-    const positionPL = position.totalSalesBookCost - position.totalPurchasesBookCost;
-    return sum + positionPL;
-  }, 0);
-  
+
+  const totalPL = closedPositionsInQuarter.reduce((sum, position) => sum + (position.realizedPL ?? 0), 0);
+
   return {
     value: totalPL,
     count: closedPositionsInQuarter.length,
@@ -109,26 +82,22 @@ const calculateQuarterlyPL = (trades: Trade[]) => {
 // Generate stats data based on actual trade data
 const getStatCardsData = (trades: Trade[]) => {
   const quarterlyPL = calculateQuarterlyPL(trades);
-  
-  // Use position manager for more accurate calculations
   const positionManager = new PositionManager(trades);
   const allPositions = positionManager.getPositions();
-  const openPositions = allPositions.filter(p => p.status === 'Open');
-  const closedPositions = allPositions.filter(p => p.status === 'Closed' || p.status === 'Expired');
-  
-  // Calculate win rate based on positions
-  const winningPositions = closedPositions.filter(p => (p.totalSalesBookCost - p.totalPurchasesBookCost) > 0);
+  const openPositions = allPositions.filter(p => p.status === 'OPEN');
+  const closedPositions = allPositions.filter(p => p.status === 'CLOSED' || p.status === 'EXPIRED');
+
+  const winningPositions = closedPositions.filter(p => (p.realizedPL ?? 0) > 0);
   const winRate = closedPositions.length > 0 ? (winningPositions.length / closedPositions.length) * 100 : 0;
-  
-  // Calculate this month's P/L from closed positions
+
   const currentDate = new Date();
   const thisMonthStart = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
   const thisMonthClosedPositions = closedPositions.filter(p => {
     if (!p.closeDate) return false;
     return new Date(p.closeDate) >= thisMonthStart;
   });
-  const monthlyPL = thisMonthClosedPositions.reduce((sum, p) => sum + (p.totalSalesBookCost - p.totalPurchasesBookCost), 0);
-  
+  const monthlyPL = thisMonthClosedPositions.reduce((sum, p) => sum + (p.realizedPL ?? 0), 0);
+
   return [
     {
       title: "Quarterly P/L",
@@ -166,80 +135,36 @@ const getStatCardsData = (trades: Trade[]) => {
 };
 
 export default function OptionsMainDashboard() {
+  const theme = useTheme();
+  const userId = getCurrentUserId();
+  const convexTrades = useQuery(api.functions.getTrades, { userId });
   const [trades, setTrades] = React.useState<Trade[]>([]);
   const [loading, setLoading] = React.useState<boolean>(true);
   const [error, setError] = React.useState<string | null>(null);
 
   React.useEffect(() => {
-    const fetchTrades = async () => {
-      try {
-        const response = await fetch(
-          "https://xtwz-brgd-1r1u.n7c.xano.io/api:8GoBSeHO/transactions",
-          {
-            headers: {
-              Authorization: `Bearer ${import.meta.env.VITE_XANO_AUTH_TOKEN}`,
-            },
-          }
-        );
+    if (convexTrades !== undefined) {
+      setTrades(convexTrades);
+      setLoading(false);
+      setError(null);
+    }
+  }, [convexTrades]);
 
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
-        }
-
-        const data = await response.json();
-        const fetchedTrades: Trade[] = data.map((item: any) => {
-          // Normalize trade type: "Sold" -> "sell", "Bought" -> "buy"
-          let normalizedTradeType = 'other';
-          if (item.tradeType) {
-            const tradeTypeLower = item.tradeType.toLowerCase();
-            if (tradeTypeLower.includes('sold') || tradeTypeLower.includes('sell')) {
-              normalizedTradeType = 'sell';
-            } else if (tradeTypeLower.includes('bought') || tradeTypeLower.includes('buy')) {
-              normalizedTradeType = 'buy';
-            }
-          }
-          
-          // Normalize status: "Open" -> "open", "Closed" -> "close"
-          let normalizedStatus = 'open';
-          if (item.status) {
-            const statusLower = item.status.toLowerCase();
-            if (statusLower.includes('close')) {
-              normalizedStatus = 'close';
-            } else if (statusLower.includes('open')) {
-              normalizedStatus = 'open';
-            }
-          }
-
-          const mappedItem: Trade = {
-            id: item.id,
-            Transaction_Date: item.Transaction_Date,
-            tradeType: normalizedTradeType,
-            Symbol: item.Symbol,
-            contractType: item.contractType,
-            Quantity: item.Quantity ?? 0,
-            StrikeDate: item.StrikeDate ?? '',
-            StrikePrice: item.StrikePrice ?? 0,
-            PremiumValue: item.PremiumValue ?? 0,
-            Book_Cost: item.Book_Cost ?? 0,
-            Security_Number: item.Security_Number,
-            status: normalizedStatus,
-            profitLoss: item.profitLoss ?? 0, // Default to 0 if not provided by Xano
-          };
-
-          return mappedItem;
-        });
-        setTrades(fetchedTrades);
-      } catch (err) {
-        setError((err as Error).message);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchTrades();
-  }, []);
-
-const statCardsData = getStatCardsData(trades);
+  const statCardsData = React.useMemo(() => {
+    if (!trades || trades.length === 0) {
+      // Return a default state for cards while loading or if there's no data
+      const defaultCard = {
+        title: "", value: "-", interval: "", trend: "up" as "up" | "down", trendValue: "", data: []
+      };
+      return [
+        { ...defaultCard, title: "Quarterly P/L" },
+        { ...defaultCard, title: "Active Positions" },
+        { ...defaultCard, title: "Monthly P/L" },
+        { ...defaultCard, title: "Win Rate" },
+      ];
+    }
+    return getStatCardsData(trades);
+  }, [trades]);
 
   if (loading) {
     return (
@@ -259,6 +184,14 @@ const statCardsData = getStatCardsData(trades);
 
   return (
     <Box sx={{ width: "100%", maxWidth: { sm: "100%", md: "1700px" } }}>
+      <Box sx={{ mb: 3 }}>
+        <TradingViewWidget 
+          key={`tradingview-${theme.palette.mode}`}
+          symbols={getTickerSymbolsFromConfig()} 
+          colorTheme={theme.palette.mode}
+        />
+      </Box>
+
       {/* Header with action buttons */}
       <Stack
         direction="row"

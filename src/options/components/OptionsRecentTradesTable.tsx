@@ -40,6 +40,14 @@ export default function OptionsRecentTradesTable({ trades, loading, error }: Opt
     );
   }
 
+  if (!Array.isArray(trades) || trades.length === 0) {
+    return (
+      <Card variant="outlined" sx={{ height: "100%", display: "flex", justifyContent: "center", alignItems: "center" }}>
+        <Typography>No recent trades found.</Typography>
+      </Card>
+    );
+  }
+
   return (
     <Card
       variant="outlined"
@@ -71,9 +79,9 @@ export default function OptionsRecentTradesTable({ trades, loading, error }: Opt
                 <TableCell>Contract Type</TableCell>
                 <TableCell>Trade Type</TableCell>
                 <TableCell>Strike Price</TableCell>
-                <TableCell>Strike Date</TableCell>
+                <TableCell>Expiration Date</TableCell>
                 <TableCell>Quantity</TableCell>
-                <TableCell align="right">Premium Value</TableCell>
+                <TableCell align="right">Premium</TableCell>
                 <TableCell>Book Cost</TableCell>
               </TableRow>
             </TableHead>
@@ -84,44 +92,41 @@ export default function OptionsRecentTradesTable({ trades, loading, error }: Opt
                   sx={{ "&:last-child td, &:last-child th": { border: 0 } }}
                 >
                   <TableCell component="th" scope="row">
-                    {trade.Transaction_Date || 'N/A'}
+                    {trade.transactionDate}
                   </TableCell>
                   <TableCell>
-                    <Typography fontWeight="medium">{trade.Symbol || 'N/A'}</Typography>
+                    <Typography fontWeight="medium">{trade.symbol}</Typography>
                   </TableCell>
-                  <TableCell>{trade.contractType || 'N/A'}</TableCell>
+                  <TableCell>{trade.contractType}</TableCell>
                   <TableCell>
                     <Typography
-                      color={trade.tradeType === "Buy" ? "error.main" : "success.main"}
+                      color={trade.tradeType?.startsWith('BUY') ? "error.main" : "success.main"}
                       sx={{ 
                         display: "flex", 
                         alignItems: "center",
                         fontWeight: "medium"
                       }}
                     >
-                      {(trade.tradeType === "Buy" || trade.tradeType === "Sell") ? (
-                        trade.tradeType === "Buy" ? (
-                          <ArrowDownwardIcon fontSize="small" sx={{ mr: 0.5 }} />
-                        ) : (
-                          <ArrowUpwardIcon fontSize="small" sx={{ mr: 0.5 }} />
-                        )
-                      ) : null}
-                      {trade.tradeType || 'N/A'}
+                      {trade.tradeType?.startsWith('BUY') ? (
+                        <ArrowDownwardIcon fontSize="small" sx={{ mr: 0.5 }} />
+                      ) : (
+                        <ArrowUpwardIcon fontSize="small" sx={{ mr: 0.5 }} />
+                      )}
+                      {trade.tradeType?.replace(/_/g, ' ')}
                     </Typography>
                   </TableCell>
-                  <TableCell>${trade.StrikePrice ?? 'N/A'}</TableCell>
-                  <TableCell>{trade.StrikeDate || 'N/A'}</TableCell>
-                  <TableCell>{trade.Quantity ?? 'N/A'}</TableCell>
+                  <TableCell>${(trade.strikePrice ?? 0).toFixed(2)}</TableCell>
+                  <TableCell>{trade.expirationDate}</TableCell>
+                  <TableCell>{trade.quantity}</TableCell>
                   <TableCell align="right">
                     <Typography
                       fontWeight="medium"
-                      color={(trade.PremiumValue ?? 0) > 0 ? "success.main" : "error.main"}
+                      color={(trade.premium ?? 0) > 0 ? "success.main" : "error.main"}
                     >
-                      {(trade.PremiumValue ?? 0) > 0 ? "+" : ""}$
-                      {Math.abs(trade.PremiumValue ?? 0).toFixed(2)}
+                      ${(trade.premium ?? 0).toFixed(2)}
                     </Typography>
                   </TableCell>
-                  <TableCell>{trade.Book_Cost ?? 'N/A'}</TableCell>
+                  <TableCell>${(trade.bookCost ?? 0).toFixed(2)}</TableCell>
                 </TableRow>
               ))}
             </TableBody>
