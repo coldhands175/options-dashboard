@@ -141,7 +141,7 @@ struct ContentView: View {
             ForEach(groupedPositions.keys.sorted(), id: \.self) { symbol in
                 Section(header: symbolHeader(for: symbol)) {
                     ForEach(groupedPositions[symbol] ?? []) { position in
-                        PositionRow(position: position)
+                        PositionRow(position: position, currentPrice: viewModel.symbolPrices[symbol])
                     }
                 }
             }
@@ -180,6 +180,7 @@ struct ContentView: View {
 
 struct PositionRow: View {
     let position: ActiveOptionPosition
+    let currentPrice: Double?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -235,6 +236,58 @@ struct PositionRow: View {
             }
         }
         .padding(.vertical, 4)
+        .padding(.horizontal, 12)
+        .background(backgroundColor(for: position, currentPrice: currentPrice))
+        .cornerRadius(8)
+    }
+
+    private func backgroundColor(for position: ActiveOptionPosition, currentPrice: Double?) -> Color {
+        guard let currentPrice = currentPrice else {
+            return Color.clear
+        }
+
+        // Calculate how far in/out of the money the position is (as percentage)
+        let percentDifference: Double
+
+        // For SHORT positions, logic is inverted
+        let isShort = position.side == .Short
+
+        if position.optionType == .PUT {
+            if isShort {
+                // Short PUT: onside when price > strike (option expires worthless)
+                percentDifference = ((currentPrice - position.strike) / position.strike) * 100
+            } else {
+                // Long PUT: onside when price < strike (can sell at higher price)
+                percentDifference = ((position.strike - currentPrice) / position.strike) * 100
+            }
+        } else {
+            // CALL
+            if isShort {
+                // Short CALL: onside when price < strike (option expires worthless)
+                percentDifference = ((position.strike - currentPrice) / position.strike) * 100
+            } else {
+                // Long CALL: onside when price > strike (can buy at lower price)
+                percentDifference = ((currentPrice - position.strike) / position.strike) * 100
+            }
+        }
+
+        // Clamp between -20% and +20%
+        let clampedPercent = max(-20, min(20, percentDifference))
+
+        if clampedPercent > 0 {
+            // Onside (in-the-money) - Green scale
+            // 1% = light green, 20% = dark green
+            let intensity = min(clampedPercent / 20.0, 1.0) // 0.0 to 1.0
+            return Color.green.opacity(0.1 + (intensity * 0.3)) // 0.1 to 0.4 opacity
+        } else if clampedPercent < 0 {
+            // Offside (out-of-the-money) - Red scale
+            // -1% = light red, -20% = dark red
+            let intensity = min(abs(clampedPercent) / 20.0, 1.0) // 0.0 to 1.0
+            return Color.red.opacity(0.1 + (intensity * 0.3)) // 0.1 to 0.4 opacity
+        } else {
+            // At-the-money
+            return Color.gray.opacity(0.1)
+        }
     }
 }
 
