@@ -37,6 +37,7 @@ struct ContentView: View {
                 }
             }
             .navigationTitle("Options Portfolio")
+            .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .primaryAction) {
                     Button {
@@ -193,7 +194,7 @@ struct PositionRow: View {
             }
 
             HStack {
-                Text("Price: $\(position.contractPrice, specifier: "%.2f")")
+                Text("Price: $\(position.averagePremiumPerShare, specifier: "%.2f")")
                     .font(.subheadline)
 
                 Spacer()

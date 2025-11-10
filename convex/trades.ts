@@ -34,8 +34,12 @@ export const createOptionTrade = mutation({
     notes: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    // TODO: Get userId from auth context
-    const userId = "default"; // Placeholder until auth is implemented
+    // Get userId from auth context
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      throw new Error("User not authenticated");
+    }
+    const userId = identity.subject;
 
     // Calculate signed quantity based on action
     // BTO/BTC: Positive (buying contracts)
@@ -81,10 +85,28 @@ export const createOptionTrade = mutation({
  * 4. Calculate total notional value
  */
 export const listActiveOptionPositions = query({
-  args: {},
-  handler: async (ctx) => {
-    // TODO: Filter by userId from auth context
-    const userId = "default";
+  args: {
+    sessionToken: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    // Try to get userId from session token (which is the session ID)
+    let userId: string | null = null;
+
+    if (args.sessionToken) {
+      try {
+        // The sessionToken IS the session document ID
+        const session = await ctx.db.get(args.sessionToken as any);
+        if (session) {
+          userId = (session as any).userId;
+        }
+      } catch (e) {
+        console.error("Failed to look up session:", e);
+      }
+    }
+
+    if (!userId) {
+      throw new Error("User not authenticated - invalid or expired session");
+    }
 
     const trades = await ctx.db
       .query("option_trades")
@@ -134,6 +156,10 @@ export const listActiveOptionPositions = query({
       // Skip if position is fully closed
       if (Math.abs(netContracts) < 0.01) continue;
 
+      // Skip if position has expired (expiration is in milliseconds)
+      const now = Date.now();
+      if (expiration < now) continue;
+
       // Determine position side
       const side = netContracts > 0 ? "Long" : "Short";
 
@@ -144,7 +170,11 @@ export const listActiveOptionPositions = query({
       );
 
       const totalPremiumCost = openingTrades.reduce(
-        (sum, trade) => sum + (trade.premium_per_share * trade.quantity_contracts),
+        (sum, trade) => {
+          // Backwards compatibility: try premium_per_share first, fallback to premium_per_contract
+          const premium = (trade as any).premium_per_share ?? (trade as any).premium_per_contract ?? 0;
+          return sum + (premium * trade.quantity_contracts);
+        },
         0
       );
 
@@ -167,6 +197,10 @@ export const listActiveOptionPositions = query({
       const openedAt = sortedTrades[0].tradeTime;
       const latestTradeTime = sortedTrades[sortedTrades.length - 1].tradeTime;
 
+      // Ensure average_premium_per_share is always a number (never undefined/null)
+      const avgPremium = average_premium_per_share ?? 0;
+      const totalNotional = avgPremium * Math.abs(netContracts) * 100;
+
       positions.push({
         underlying,
         optionType,
@@ -176,8 +210,8 @@ export const listActiveOptionPositions = query({
         side,
         openedAt,
         latestTradeTime,
-        average_premium_per_share,
-        notional,
+        average_premium_per_share: avgPremium,
+        notional: totalNotional,
       });
     }
 
@@ -194,8 +228,12 @@ export const listActiveOptionPositions = query({
 export const listUserTransactions = query({
   args: {},
   handler: async (ctx) => {
-    // TODO: Filter by userId from auth context
-    const userId = "default";
+    // Get userId from auth context
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      throw new Error("User not authenticated");
+    }
+    const userId = identity.subject;
 
     const trades = await ctx.db
       .query("option_trades")
@@ -204,10 +242,28 @@ export const listUserTransactions = query({
       .collect();
 
     return {
-      items: trades.map((trade) => ({
-        kind: "option" as const,
-        ...trade,
-      })),
+      items: trades.map((trade) => {
+        // Backwards compatibility: map old field names to new ones
+        const premium = (trade as any).premium_per_share ?? (trade as any).premium_per_contract ?? 0;
+
+        return {
+          kind: "option" as const,
+          _id: trade._id,
+          _creationTime: trade._creationTime,
+          underlying: trade.underlying,
+          optionType: trade.optionType,
+          strike: trade.strike,
+          expiration: trade.expiration,
+          action: trade.action,
+          quantityContracts: trade.quantity_contracts,
+          premiumPerShare: premium,
+          notional: trade.notional,
+          tradeTime: trade.tradeTime,
+          brokerTradeNumber: trade.brokerTradeNumber,
+          accountTag: trade.accountTag,
+          notes: trade.notes,
+        };
+      }),
     };
   },
 });
@@ -223,8 +279,12 @@ export const getOptionContractDetails = query({
     expiration: v.number(),
   },
   handler: async (ctx, args) => {
-    // TODO: Filter by userId from auth context
-    const userId = "default";
+    // Get userId from auth context
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      throw new Error("User not authenticated");
+    }
+    const userId = identity.subject;
 
     const trades = await ctx.db
       .query("option_trades")

@@ -31,10 +31,10 @@ actor ConvexClient {
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
 
-        // Add auth token if available
-        if let token = authToken {
-            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-        }
+        // Don't send auth token in header - we pass it as sessionToken argument instead
+        // if let token = authToken {
+        //     request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        // }
         
         let body: [String: Any] = [
             "path": functionName,

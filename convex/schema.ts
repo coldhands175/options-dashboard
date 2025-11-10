@@ -15,7 +15,8 @@ export default defineSchema({
     ),
     quantity_contracts: v.number(), // Absolute value
     quantity_signed_contracts: v.number(), // Signed value for aggregation
-    premium_per_share: v.number(), // Premium per share (NOT per contract)
+    premium_per_share: v.optional(v.number()), // Premium per share (NEW - optional for backwards compatibility)
+    premium_per_contract: v.optional(v.number()), // OLD field - deprecated but kept for backwards compatibility
     notional: v.number(), // Total cost: premium_per_share × quantity_contracts × 100
     tradeTime: v.number(), // Unix timestamp in milliseconds
     brokerTradeNumber: v.optional(v.string()),

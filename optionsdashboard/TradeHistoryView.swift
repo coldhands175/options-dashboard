@@ -157,7 +157,7 @@ struct TradeRow: View {
                     VStack(alignment: .trailing, spacing: 2) {
                         Text("Qty: \(trade.quantityContracts, specifier: "%.0f")")
                             .font(.subheadline)
-                        Text("Premium: $\(trade.premiumPerContract, specifier: "%.2f")")
+                        Text("Premium: $\(trade.premiumPerShare, specifier: "%.2f")")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
@@ -169,7 +169,7 @@ struct TradeRow: View {
 
                     Spacer()
 
-                    Text("Premium: $\(trade.premiumPerContract, specifier: "%.2f")")
+                    Text("Premium: $\(trade.premiumPerShare, specifier: "%.2f")")
                         .font(.subheadline)
                 }
             }

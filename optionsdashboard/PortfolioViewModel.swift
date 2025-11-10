@@ -34,7 +34,9 @@ class PortfolioViewModel {
         await MainActor.run { errorMessage = nil }
 
         do {
-            let result: [ActiveOptionPosition] = try await convexClient.query("trades:listActiveOptionPositions")
+            // Pass session token as argument
+            let args: [String: Any] = convexClient.authToken != nil ? ["sessionToken": convexClient.authToken!] : [:]
+            let result: [ActiveOptionPosition] = try await convexClient.query("trades:listActiveOptionPositions", args: args)
             await MainActor.run { positions = result }
         } catch {
             await MainActor.run {

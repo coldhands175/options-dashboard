@@ -77,7 +77,7 @@ class AuthManager {
                 }
             }
 
-            let response: SignInResponse = try await convexClient.action("auth:signIn", args: args)
+            let response: SignInResponse = try await convexClient.mutation("authFunctions:signIn", args: args)
 
             if let token = response.tokens?.token {
                 await MainActor.run {
@@ -102,7 +102,7 @@ class AuthManager {
         await MainActor.run { isLoading = true }
 
         do {
-            let _: EmptyResponse = try await convexClient.action("auth:signOut")
+            let _: EmptyResponse = try await convexClient.mutation("authFunctions:signOut")
         } catch {
             print("Sign out error (ignored): \(error)")
         }
