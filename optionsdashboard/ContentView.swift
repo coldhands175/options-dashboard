@@ -138,11 +138,41 @@ struct ContentView: View {
 
     private var positionsList: some View {
         List {
-            ForEach(viewModel.positions) { position in
-                PositionRow(position: position)
+            ForEach(groupedPositions.keys.sorted(), id: \.self) { symbol in
+                Section(header: symbolHeader(for: symbol)) {
+                    ForEach(groupedPositions[symbol] ?? []) { position in
+                        PositionRow(position: position)
+                    }
+                }
             }
         }
         .listStyle(.plain)
+    }
+
+    private func symbolHeader(for symbol: String) -> some View {
+        HStack {
+            Text(symbol)
+                .font(.headline)
+            if let price = viewModel.symbolPrices[symbol] {
+                Text("- $\(price, specifier: "%.2f")")
+                    .font(.headline)
+                    .foregroundStyle(.secondary)
+
+                if let percentChange = viewModel.symbolPriceChanges[symbol] {
+                    Text("\(percentChange >= 0 ? "+" : "")\(percentChange, specifier: "%.2f")%")
+                        .font(.headline)
+                        .foregroundStyle(percentChange >= 0 ? .green : .red)
+                }
+            }
+        }
+    }
+
+    // Group positions by symbol and sort by expiration within each group
+    private var groupedPositions: [String: [ActiveOptionPosition]] {
+        Dictionary(grouping: viewModel.positions) { $0.underlying }
+            .mapValues { positions in
+                positions.sorted { $0.expiration < $1.expiration }
+            }
     }
 }
 

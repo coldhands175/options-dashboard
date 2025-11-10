@@ -24,6 +24,12 @@ class PortfolioViewModel {
     @MainActor
     var errorMessage: String?
 
+    @MainActor
+    var symbolPrices: [String: Double] = [:]
+
+    @MainActor
+    var symbolPriceChanges: [String: Double] = [:] // Percent change
+
     init(convexURL: String = "https://clever-poodle-30.convex.cloud", authToken: String? = nil) {
         self.convexClient = ConvexClient(convexURL: convexURL, authToken: authToken)
     }
@@ -38,6 +44,9 @@ class PortfolioViewModel {
             let args: [String: Any] = convexClient.authToken != nil ? ["sessionToken": convexClient.authToken!] : [:]
             let result: [ActiveOptionPosition] = try await convexClient.query("trades:listActiveOptionPositions", args: args)
             await MainActor.run { positions = result }
+
+            // Fetch prices for all unique symbols
+            await fetchPricesForSymbols()
         } catch {
             await MainActor.run {
                 errorMessage = "Failed to load positions: \(error.localizedDescription)"
@@ -46,6 +55,58 @@ class PortfolioViewModel {
         }
 
         await MainActor.run { isLoading = false }
+    }
+
+    /// Fetch current prices for all unique symbols in positions
+    private func fetchPricesForSymbols() async {
+        let symbols = await MainActor.run {
+            Set(positions.map { $0.underlying })
+        }
+
+        for symbol in symbols {
+            if let (price, percentChange) = await fetchStockPrice(symbol: symbol) {
+                await MainActor.run {
+                    symbolPrices[symbol] = price
+                    symbolPriceChanges[symbol] = percentChange
+                }
+            }
+        }
+    }
+
+    /// Fetch current stock price and percent change using Yahoo Finance API
+    private func fetchStockPrice(symbol: String) async -> (price: Double, percentChange: Double)? {
+        // Using Yahoo Finance query API
+        let urlString = "https://query1.finance.yahoo.com/v8/finance/chart/\(symbol)?interval=1d&range=1d"
+
+        guard let url = URL(string: urlString) else {
+            print("Invalid URL for symbol: \(symbol)")
+            return nil
+        }
+
+        do {
+            let (data, _) = try await URLSession.shared.data(from: url)
+
+            // Parse Yahoo Finance response
+            if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+               let chart = json["chart"] as? [String: Any],
+               let result = chart["result"] as? [[String: Any]],
+               let firstResult = result.first,
+               let meta = firstResult["meta"] as? [String: Any],
+               let regularMarketPrice = meta["regularMarketPrice"] as? Double,
+               let previousClose = meta["chartPreviousClose"] as? Double {
+
+                // Calculate percent change
+                let percentChange = ((regularMarketPrice - previousClose) / previousClose) * 100
+
+                return (regularMarketPrice, percentChange)
+            }
+
+            print("Failed to parse price for symbol: \(symbol)")
+            return nil
+        } catch {
+            print("Error fetching price for \(symbol): \(error)")
+            return nil
+        }
     }
 
     /// Fetch trade history from Convex
