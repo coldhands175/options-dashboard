@@ -1,0 +1,11 @@
+{
+  "name": "optionsdashboard-convex",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "convex dev"
+  },
+  "dependencies": {
+    "convex": "^1.17.4"
+  }
+}

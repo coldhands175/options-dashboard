@@ -9,9 +9,15 @@ import SwiftUI
 
 @main
 struct optionsdashboardApp: App {
+    @State private var authManager = AuthManager()
+
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            if authManager.isAuthenticated {
+                ContentView(authManager: authManager)
+            } else {
+                LoginView(authManager: authManager)
+            }
         }
     }
 }
