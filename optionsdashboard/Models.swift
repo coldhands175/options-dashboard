@@ -21,8 +21,8 @@ struct ActiveOptionPosition: Identifiable, Sendable {
     let side: PositionSide
     let openedAt: Date
     let latestTradeTime: Date
-    let premiumPerContract: Double // Contract price from Convex
-    let notional: Double // Book value from Convex
+    let averagePremiumPerShare: Double // Weighted average premium per share
+    let notional: Double // Total book value (premiumPerShare × netContracts × 100)
 
     enum CodingKeys: String, CodingKey {
         case underlying
@@ -33,18 +33,23 @@ struct ActiveOptionPosition: Identifiable, Sendable {
         case side
         case openedAt
         case latestTradeTime
-        case premiumPerContract = "premium_per_contract"
+        case averagePremiumPerShare = "average_premium_per_share"
         case notional
     }
 
-    /// Book value from Convex
+    /// Total book value (cost basis)
     var notionalValue: Double {
         notional
     }
 
-    /// Contract price from Convex
-    var contractPrice: Double {
-        premiumPerContract
+    /// Average premium per share across all trades
+    var premiumPerShare: Double {
+        averagePremiumPerShare
+    }
+
+    /// Average premium per contract (100 shares)
+    var premiumPerContract: Double {
+        averagePremiumPerShare * 100
     }
 
     /// Returns a formatted expiration date
@@ -78,8 +83,8 @@ extension ActiveOptionPosition: Codable {
         let latestMs = try container.decode(Double.self, forKey: .latestTradeTime)
         latestTradeTime = Date(timeIntervalSince1970: latestMs / 1000)
 
-        // Decode required premium and notional from Convex
-        premiumPerContract = try container.decode(Double.self, forKey: .premiumPerContract)
+        // Decode weighted average premium and total notional from Convex
+        averagePremiumPerShare = try container.decode(Double.self, forKey: .averagePremiumPerShare)
         notional = try container.decode(Double.self, forKey: .notional)
 
         // Generate ID from contract specs
@@ -99,8 +104,8 @@ struct OptionTrade: Identifiable, Sendable {
     let action: TradeAction
     let quantityContracts: Double
     let quantitySignedContracts: Double
-    let premiumPerContract: Double
-    let notional: Double
+    let premiumPerShare: Double // Premium per share (contract = 100 shares)
+    let notional: Double // Total cost: premiumPerShare × quantityContracts × 100
     let tradeTime: Date
     let brokerTradeNumber: String?
     let accountTag: String?
@@ -115,7 +120,7 @@ struct OptionTrade: Identifiable, Sendable {
         case action
         case quantityContracts = "quantity_contracts"
         case quantitySignedContracts = "quantity_signed_contracts"
-        case premiumPerContract = "premium_per_contract"
+        case premiumPerShare = "premium_per_share"
         case notional
         case tradeTime
         case brokerTradeNumber
@@ -148,7 +153,7 @@ extension OptionTrade: Codable {
         action = try container.decode(TradeAction.self, forKey: .action)
         quantityContracts = try container.decode(Double.self, forKey: .quantityContracts)
         quantitySignedContracts = try container.decode(Double.self, forKey: .quantitySignedContracts)
-        premiumPerContract = try container.decode(Double.self, forKey: .premiumPerContract)
+        premiumPerShare = try container.decode(Double.self, forKey: .premiumPerShare)
         notional = try container.decode(Double.self, forKey: .notional)
 
         let tradeTimeMs = try container.decode(Double.self, forKey: .tradeTime)

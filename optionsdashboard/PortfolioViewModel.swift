@@ -115,6 +115,9 @@ class PortfolioViewModel {
         await MainActor.run { errorMessage = nil }
 
         do {
+            // IMPORTANT: premium is per-share, not per-contract
+            // 1 options contract = 100 shares
+            // Total notional = premium_per_share × quantity_contracts × 100
             var args: [String: Any] = [
                 "underlying": underlying.uppercased(),
                 "optionType": optionType.rawValue,
@@ -122,7 +125,7 @@ class PortfolioViewModel {
                 "expiration": expiration.timeIntervalSince1970 * 1000, // Convex uses milliseconds
                 "action": action.rawValue,
                 "quantity_contracts": abs(quantity),
-                "premium_per_contract": premium,
+                "premium_per_share": premium, // Premium per share, NOT per contract
                 "tradeTime": tradeTime.timeIntervalSince1970 * 1000
             ]
 

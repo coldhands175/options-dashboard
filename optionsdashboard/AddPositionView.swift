@@ -53,8 +53,12 @@ struct AddTradeView: View {
                     TextField("Quantity (contracts)", text: $quantity)
                         .keyboardType(.decimalPad)
 
-                    TextField("Premium (per share)", text: $premium)
+                    TextField("Premium per Share ($)", text: $premium)
                         .keyboardType(.decimalPad)
+
+                    Text("Note: 1 contract = 100 shares")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
 
                 Section("Optional") {
