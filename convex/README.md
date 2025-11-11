@@ -1,116 +1,90 @@
-# Convex Backend - Option Trading Dashboard
+# Welcome to your Convex functions directory!
 
-## Overview
+Write your Convex functions here.
+See https://docs.convex.dev/functions for more.
 
-This directory contains the Convex backend functions for the Options Trading Dashboard iOS app.
+A query function that takes two arguments looks like:
 
-## Critical Fix: Premium Calculation
+```ts
+// functions.js
+import { query } from "./_generated/server";
+import { v } from "convex/values";
 
-### The Problem
+export const myQueryFunction = query({
+  // Validators for arguments.
+  args: {
+    first: v.number(),
+    second: v.string(),
+  },
 
-The previous implementation was calculating notional value as:
-```
-notional = quantity_contracts × 100
-```
+  // Function implementation.
+  handler: async (ctx, args) => {
+    // Read the database as many times as you need here.
+    // See https://docs.convex.dev/database/reading-data.
+    const documents = await ctx.db.query("tablename").collect();
 
-This **ignored the premium entirely**, resulting in incorrect position values.
+    // Arguments passed from the client are properties of the args object.
+    console.log(args.first, args.second);
 
-### The Solution
-
-**Correct Formula:**
-```typescript
-notional = premium_per_share × quantity_contracts × 100
-```
-
-**Explanation:**
-- Users enter **premium per share** (e.g., $5.50)
-- 1 options contract = **100 shares**
-- Total cost = premium × quantity × 100
-
-**Example:**
-- Action: BTO (Buy to Open)
-- Quantity: 2 contracts
-- Premium: $5.50 per share
-- **Correct notional: $5.50 × 2 × 100 = $1,100**
-- **Wrong notional: 2 × 100 = $200** ❌
-
-## Field Name Changes
-
-To fix the semantic mismatch, the field has been renamed:
-
-| Old Name | New Name | Description |
-|----------|----------|-------------|
-| `premium_per_contract` | `premium_per_share` | Premium per share (NOT per contract) |
-
-**Both client and backend now use `premium_per_share` consistently.**
-
-## Key Functions
-
-### `createOptionTrade`
-Creates a new trade and calculates:
-- `quantity_signed_contracts`: Positive for buy, negative for sell
-- `notional`: `premium_per_share × quantity_contracts × 100`
-
-### `listActiveOptionPositions`
-Aggregates trades into positions:
-1. Groups by contract spec (underlying, type, strike, expiration)
-2. Sums signed quantities → `netContracts`
-3. Calculates weighted average premium from opening trades
-4. Calculates total notional: `avg_premium × netContracts × 100`
-
-## Deployment
-
-To deploy these fixes to your Convex backend:
-
-```bash
-# Install dependencies
-npm install
-
-# Deploy to Convex
-npx convex dev
+    // Write arbitrary JavaScript here: filter, aggregate, build derived data,
+    // remove non-public properties, or create new objects.
+    return documents;
+  },
+});
 ```
 
-## Testing
+Using this query function in a React component looks like:
 
-Test the fix with these examples:
-
-**Example 1: Simple Long Position**
-```
-BTO 2 AAPL 150C @ $5.50
-Expected notional: $1,100
-```
-
-**Example 2: Partial Close**
-```
-BTO 5 TSLA 200P @ $3.25  → Cost: $1,625
-STC 2 TSLA 200P @ $4.00  → Proceeds: $800
-Net position: 3 contracts long
-Avg premium: $3.25
-Book value: $975
+```ts
+const data = useQuery(api.functions.myQueryFunction, {
+  first: 10,
+  second: "hello",
+});
 ```
 
-**Example 3: Short Position**
+A mutation function looks like:
+
+```ts
+// functions.js
+import { mutation } from "./_generated/server";
+import { v } from "convex/values";
+
+export const myMutationFunction = mutation({
+  // Validators for arguments.
+  args: {
+    first: v.string(),
+    second: v.string(),
+  },
+
+  // Function implementation.
+  handler: async (ctx, args) => {
+    // Insert or modify documents in the database here.
+    // Mutations can also read from the database like queries.
+    // See https://docs.convex.dev/database/writing-data.
+    const message = { body: args.first, author: args.second };
+    const id = await ctx.db.insert("messages", message);
+
+    // Optionally, return a value from your mutation.
+    return await ctx.db.get(id);
+  },
+});
 ```
-STO 1 SPY 450C @ $2.75
-Expected notional: $275 (premium received)
-Position: 1 contract short
+
+Using this mutation function in a React component looks like:
+
+```ts
+const mutation = useMutation(api.functions.myMutationFunction);
+function handleButtonPress() {
+  // fire and forget, the most common way to use mutations
+  mutation({ first: "Hello!", second: "me" });
+  // OR
+  // use the result once the mutation has completed
+  mutation({ first: "Hello!", second: "me" }).then((result) =>
+    console.log(result),
+  );
+}
 ```
 
-## Migration Notes
-
-If you have existing trades in the database with `premium_per_contract` instead of `premium_per_share`:
-
-1. The field name change means existing trades will decode with `premium_per_share = 0`
-2. You may need to migrate existing data or re-enter trades
-3. Alternative: Update schema.ts to support both field names temporarily
-
-## Auth Integration
-
-Current implementation uses placeholder `userId = "default"`. To integrate with your auth system:
-
-1. Update all queries/mutations to get userId from `ctx.auth`
-2. Example:
-   ```typescript
-   const identity = await ctx.auth.getUserIdentity();
-   const userId = identity?.subject ?? "anonymous";
-   ```
+Use the Convex CLI to push your functions to a deployment. See everything
+the Convex CLI can do by running `npx convex -h` in your project root
+directory. To learn more, launch the docs with `npx convex docs`.

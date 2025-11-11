@@ -5,10 +5,16 @@ This document outlines the deployment strategy for the Options Dashboard monorep
 ## Repository Structure
 
 ```
-optionsdashboard/
-├── optionsdashboard/              # iOS app source
-├── optionsdashboard.xcodeproj/    # Xcode project
+options-dashboard/                  # Monorepo
+├── mobile/                         # iOS app
+│   ├── optionsdashboard/          # Swift source
+│   └── optionsdashboard.xcodeproj/ # Xcode project
+├── web/                            # Next.js web app
+│   ├── app/                        # Pages (App Router)
+│   ├── components/                 # React components
+│   └── package.json                # @options-dashboard/web
 ├── convex/                         # Shared Convex backend
+├── package.json                    # Root: options-dashboard
 ├── .env.local                      # Development deployment config
 └── .env.production                 # Production deployment config (gitignored)
 ```
@@ -70,8 +76,15 @@ optionsdashboard/
 - **Config File**: `.env.local`
 - **Usage**: Daily development and testing
 
-**Start dev server**:
+**Start dev servers**:
 ```bash
+# Backend only
+npm run dev:backend
+
+# Web app only
+npm run dev:web
+
+# Both web + backend
 npm run dev
 ```
 
@@ -138,18 +151,35 @@ let baseURL = "https://clever-poodle-30.convex.cloud" // prod deployment (same U
 3. Open Xcode on `main` branch
 4. Archive and upload to App Store Connect
 
-## Web App Deployment (Future)
+## Web App Deployment
 
-When adding web app:
+### Vercel Configuration
+- **Project name**: `options-dashboard-web`
+- **Framework**: Next.js
+- **Root directory**: `web/`
+- **Build command**: `npm run build`
+- **Environment variables**:
+  - `CONVEX_URL`: Convex deployment URL
+  - `NEXT_PUBLIC_CONVEX_URL`: Client-side Convex URL
 
 ### Development (from `dev` branch)
-- Deploy to preview environment (Vercel/Netlify preview)
-- Use development Convex deployment
+- Preview deployments on every PR
+- Uses development Convex deployment
+- URL: `options-dashboard-web-<branch>.vercel.app`
 
 ### Production (from `main` branch)
-- Deploy to production environment
-- Use production Convex deployment
 - Auto-deploy on push to `main`
+- Uses production Convex deployment
+- URL: `options-dashboard-web.vercel.app` (or custom domain)
+
+**Manual deploy**:
+```bash
+# Build web app
+npm run build:web
+
+# Deploy via Vercel CLI
+cd web && vercel --prod
+```
 
 ## Environment Variables
 
@@ -158,9 +188,10 @@ Update the Convex URL based on build configuration:
 - **Debug**: Development deployment URL
 - **Release**: Production deployment URL
 
-### Web App (Future)
-- **Development**: `.env.development` with dev Convex URL
-- **Production**: `.env.production` with prod Convex URL
+### Web App
+The web app reads Convex URL from environment variables (set in Vercel):
+- **Development**: Uses dev Convex deployment
+- **Production**: Uses prod Convex deployment
 
 ## Checklist Before Production Deploy
 

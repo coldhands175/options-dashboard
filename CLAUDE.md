@@ -4,23 +4,53 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Options Dashboard is a native iOS application for tracking options trading positions. The app uses SwiftUI for the UI and Convex (https://clever-poodle-30.convex.cloud) as the backend database.
+Options Dashboard is a **monorepo** containing:
+- **Mobile**: Native iOS app (SwiftUI) for tracking options trading positions
+- **Web**: Next.js web app with authentication, PDF imports, and advanced features
+- **Backend**: Shared Convex backend (https://clever-poodle-30.convex.cloud) used by both clients
 
 ## Build and Run Commands
 
-### Building the Project
+### Monorepo Structure
+```
+options-dashboard/
+├── mobile/              # iOS app (SwiftUI)
+├── web/                 # Web app (Next.js)
+├── convex/              # Shared Convex backend
+└── package.json         # Root package.json
+```
+
+### Backend (Convex)
+```bash
+# Start Convex dev server (watches for changes)
+npm run dev:backend
+
+# Full monorepo dev (web + backend)
+npm run dev
+```
+
+### Web App
+```bash
+# Run web app dev server
+npm run dev:web
+
+# Build web app for production
+npm run build:web
+```
+
+### iOS App
 ```bash
 # Build for iOS Simulator (use list_sims to find available simulators)
-mcp__XcodeBuildMCP__build_sim --projectPath "optionsdashboard.xcodeproj" --scheme "optionsdashboard" --simulatorName "iPhone 16"
+mcp__XcodeBuildMCP__build_sim --projectPath "mobile/optionsdashboard.xcodeproj" --scheme "optionsdashboard" --simulatorName "iPhone 16"
 
 # Build and run in one step
-mcp__XcodeBuildMCP__build_run_sim --projectPath "optionsdashboard.xcodeproj" --scheme "optionsdashboard" --simulatorName "iPhone 16"
+mcp__XcodeBuildMCP__build_run_sim --projectPath "mobile/optionsdashboard.xcodeproj" --scheme "optionsdashboard" --simulatorName "iPhone 16"
 ```
 
 ### Running Tests
 ```bash
-# Run unit and UI tests
-mcp__XcodeBuildMCP__test_sim --projectPath "optionsdashboard.xcodeproj" --scheme "optionsdashboard" --simulatorName "iPhone 16"
+# Run iOS unit and UI tests
+mcp__XcodeBuildMCP__test_sim --projectPath "mobile/optionsdashboard.xcodeproj" --scheme "optionsdashboard" --simulatorName "iPhone 16"
 ```
 
 ### Simulator Management
@@ -129,23 +159,37 @@ When working with dates for Convex:
 
 ## Project File Structure
 ```
-optionsdashboard/
-├── optionsdashboard/
-│   ├── optionsdashboardApp.swift       # App entry point
-│   ├── ContentView.swift                # Main portfolio view (positions list)
-│   ├── AddTradeView.swift               # Add trade form with action picker
-│   ├── TradeHistoryView.swift           # Trade history view (chronological/grouped)
-│   ├── PortfolioViewModel.swift         # Business logic & state management
-│   ├── ConvexClient.swift               # Convex API client (actor-based)
-│   └── Models.swift                     # Data models (ActiveOptionPosition, OptionTrade)
-├── optionsdashboard.xcodeproj/          # Xcode project
-├── optionsdashboardTests/               # Unit tests
-├── optionsdashboardUITests/             # UI tests
-├── convex/                               # Convex backend (local setup for MCP)
-│   └── (empty - backend is deployed)
-├── package.json                          # Node.js dependencies for Convex MCP
-├── convex.json                           # Convex deployment configuration
-└── .env.local                            # Convex deployment environment
+options-dashboard/                       # Monorepo root
+├── mobile/                              # iOS App
+│   ├── optionsdashboard/
+│   │   ├── optionsdashboardApp.swift   # App entry point
+│   │   ├── ContentView.swift            # Main portfolio view
+│   │   ├── AddTradeView.swift           # Add trade form
+│   │   ├── TradeHistoryView.swift       # Trade history view
+│   │   ├── PortfolioViewModel.swift     # Business logic & state
+│   │   ├── ConvexClient.swift           # Convex API client
+│   │   └── Models.swift                 # Data models
+│   ├── optionsdashboard.xcodeproj/      # Xcode project
+│   ├── optionsdashboardTests/           # Unit tests
+│   └── optionsdashboardUITests/         # UI tests
+├── web/                                 # Web App
+│   ├── app/                             # Next.js pages (App Router)
+│   ├── components/                      # React components
+│   ├── lib/                             # Utilities
+│   ├── package.json                     # Web app dependencies
+│   └── next.config.ts                   # Next.js config
+├── convex/                              # Shared Backend
+│   ├── schema.ts                        # Database schema
+│   ├── trades.ts                        # Trade functions
+│   ├── auth.ts                          # Authentication
+│   ├── pdf.ts                           # PDF import functions
+│   ├── quotes.ts                        # Market data
+│   └── ...                              # Other backend functions
+├── package.json                         # Root package.json
+├── .env.local                           # Dev Convex deployment
+├── .env.production                      # Prod Convex deployment
+├── DEPLOYMENT.md                        # Deployment guide
+└── CLAUDE.md                            # This file
 ```
 
 ## Convex Backend
