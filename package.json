@@ -13,6 +13,7 @@
     "build:web": "cd web && npm run build"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.67.1",
     "@convex-dev/auth": "^0.0.90",
     "convex": "^1.28.2"
   },
