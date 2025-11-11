@@ -1,5 +1,6 @@
 # Convex
 .env.local
+.env.production
 node_modules/
 convex/_generated/
 

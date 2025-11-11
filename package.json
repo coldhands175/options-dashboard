@@ -3,7 +3,9 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "dev": "convex dev"
+    "dev": "convex dev",
+    "deploy:prod": "convex deploy --prod",
+    "deploy:preview": "convex deploy --preview-name preview"
   },
   "dependencies": {
     "@convex-dev/auth": "^0.0.90",
