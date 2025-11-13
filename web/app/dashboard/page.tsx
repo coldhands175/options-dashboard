@@ -34,6 +34,20 @@ type PositionRow = {
   side: "Long" | "Short";
 };
 
+type HoldingRow = {
+  symbol: string;
+  netShares: number;
+  side: string;
+  averagePrice: number;
+  totalNotional: number;
+};
+
+const getPositionKey = (position: PositionRow) =>
+  `${position.underlying}-${position.optionType}-${position.strike}-${position.expiration}`;
+
+const getHoldingKey = (holding: HoldingRow) =>
+  `${holding.symbol}-${holding.side}-${holding.netShares}-${holding.averagePrice}`;
+
 type Transaction = {
   _id: string;
   kind: string;
@@ -57,9 +71,7 @@ export default function DashboardPage() {
   const transactions = useQuery(api.trades.listUserTransactions, { limit: 5 }) as
     | { items: Transaction[] }
     | undefined;
-  const holdings = useQuery(api.trades.listStockHoldings) as
-    | Array<{ symbol: string; netShares: number; side: string; averagePrice: number; totalNotional: number }>
-    | undefined;
+  const holdings = useQuery(api.trades.listStockHoldings) as HoldingRow[] | undefined;
 
   if (isLoading) {
     return (
@@ -156,8 +168,8 @@ export default function DashboardPage() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {positions.slice(0, 5).map((pos, idx) => (
-                        <TableRow key={idx}>
+                      {positions.slice(0, 5).map((pos) => (
+                        <TableRow key={getPositionKey(pos)}>
                           <TableCell className="font-medium">
                             <Link
                               href={`/positions/${pos.underlying}/${pos.optionType}/${pos.strike}/${pos.expiration}`}
@@ -262,8 +274,8 @@ export default function DashboardPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {holdings.filter((h) => h.netShares !== 0).map((holding, idx) => (
-                    <TableRow key={idx}>
+                  {holdings.filter((h) => h.netShares !== 0).map((holding) => (
+                    <TableRow key={getHoldingKey(holding)}>
                       <TableCell className="font-medium">{holding.symbol}</TableCell>
                       <TableCell>
                         <Badge variant={holding.side === "Long" ? "outline" : "destructive"}>
@@ -299,9 +311,9 @@ export default function DashboardPage() {
             </CardHeader>
             <CardContent>
               <div className="space-y-2">
-                {upcomingExpirations.map((pos, idx) => (
+                {upcomingExpirations.map((pos) => (
                   <div
-                    key={idx}
+                    key={getPositionKey(pos)}
                     className="flex items-center justify-between p-2 bg-background rounded border border-border"
                   >
                     <div className="flex items-center gap-3">
