@@ -110,6 +110,8 @@ export const createOptionTrade = mutation({
     if (qty <= 0) throw new Error("Contracts must be > 0");
     if (args.premium_per_contract <= 0) throw new Error("Premium must be > 0");
 
+    assertValidOptionTradeInput(args);
+
     const underlying = normalizeTicker(args.underlying);
     const qSigned = signedContracts(args.action, qty);
     const multiplier = 100;
@@ -136,6 +138,41 @@ export const createOptionTrade = mutation({
     return id;
   },
 });
+
+const OPTION_EXPIRATION_PAST_TOLERANCE_MS = 5 * 60 * 1000;
+
+type OptionTradeArgsSubset = {
+  strike: number;
+  expiration: number;
+};
+
+function assertValidOptionTradeInput(
+  args: OptionTradeArgsSubset,
+  now: number = Date.now(),
+) {
+  if (!Number.isFinite(args.strike) || args.strike <= 0) {
+    throw new Error(
+      `Strike price must be greater than 0. Received ${args.strike}.`,
+    );
+  }
+
+  if (!Number.isFinite(args.expiration)) {
+    throw new Error(
+      `Expiration must be a valid millisecond timestamp. Received ${args.expiration}.`,
+    );
+  }
+
+  const threshold = now - OPTION_EXPIRATION_PAST_TOLERANCE_MS;
+  if (args.expiration <= threshold) {
+    const toleranceMinutes = Math.round(
+      OPTION_EXPIRATION_PAST_TOLERANCE_MS / 60000,
+    );
+    const received = new Date(args.expiration).toISOString();
+    throw new Error(
+      `Expiration must be a future timestamp within a ${toleranceMinutes}-minute tolerance. Received ${received}.`,
+    );
+  }
+}
 
 // List current user's transactions (both types), newest first, with a discriminator
 export const listUserTransactions = query({
@@ -243,6 +280,101 @@ export const listUserTransactions = query({
     const nextCursor = last ? { lastTime: last.tradeTime, lastType: last.kind } : undefined;
 
     return { items, nextCursor };
+  },
+});
+
+export const testOptionTradeGuards = action({
+  args: { now: v.optional(v.number()) },
+  returns: v.object({
+    toleranceMs: v.number(),
+    scenarios: v.array(
+      v.object({
+        scenario: v.string(),
+        passed: v.boolean(),
+        message: v.string(),
+      }),
+    ),
+  }),
+  handler: async (_ctx, args) => {
+    const now = args.now ?? Date.now();
+    const baseArgs = {
+      strike: 100,
+      expiration: now + 24 * 60 * 60 * 1000,
+    } satisfies OptionTradeArgsSubset;
+
+    const scenarios: { scenario: string; passed: boolean; message: string }[] = [];
+
+    const recordSuccess = (scenario: string, run: () => void) => {
+      try {
+        run();
+        scenarios.push({
+          scenario,
+          passed: true,
+          message: "Validation succeeded.",
+        });
+      } catch (error) {
+        scenarios.push({
+          scenario,
+          passed: false,
+          message: error instanceof Error ? error.message : String(error),
+        });
+      }
+    };
+
+    const recordFailure = (
+      scenario: string,
+      run: () => void,
+      expectedMessage: string,
+    ) => {
+      try {
+        run();
+        scenarios.push({
+          scenario,
+          passed: false,
+          message: "Expected validation to fail but it passed.",
+        });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        scenarios.push({
+          scenario,
+          passed: message === expectedMessage,
+          message,
+        });
+      }
+    };
+
+    recordSuccess("valid", () => {
+      assertValidOptionTradeInput(baseArgs, now);
+    });
+
+    const negativeStrikeArgs = { ...baseArgs, strike: -5 };
+    recordFailure(
+      "negative strike",
+      () => assertValidOptionTradeInput(negativeStrikeArgs, now),
+      `Strike price must be greater than 0. Received ${negativeStrikeArgs.strike}.`,
+    );
+
+    const pastExpiration = now - OPTION_EXPIRATION_PAST_TOLERANCE_MS - 1;
+    const pastExpirationArgs = { ...baseArgs, expiration: pastExpiration };
+    recordFailure(
+      "stale expiration",
+      () => assertValidOptionTradeInput(pastExpirationArgs, now),
+      `Expiration must be a future timestamp within a ${Math.round(
+        OPTION_EXPIRATION_PAST_TOLERANCE_MS / 60000,
+      )}-minute tolerance. Received ${new Date(pastExpiration).toISOString()}.`,
+    );
+
+    const invalidExpirationArgs = { ...baseArgs, expiration: Number.NaN };
+    recordFailure(
+      "invalid expiration",
+      () => assertValidOptionTradeInput(invalidExpirationArgs, now),
+      `Expiration must be a valid millisecond timestamp. Received ${invalidExpirationArgs.expiration}.`,
+    );
+
+    return {
+      toleranceMs: OPTION_EXPIRATION_PAST_TOLERANCE_MS,
+      scenarios,
+    };
   },
 });
 
