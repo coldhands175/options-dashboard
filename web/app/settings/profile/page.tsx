@@ -80,7 +80,10 @@ export default function EditProfile() {
     setMessage(null); // Clear any existing message
   };
 
-  const handleFileUpload = async (file: File, type: 'avatar' | 'banner'): Promise<string> => {
+  const handleFileUpload = async (
+    file: File,
+    type: 'avatar' | 'banner'
+  ): Promise<{ success: true; storageId: string }> => {
     try {
       // Generate upload URL
       const uploadUrl = await generateUploadUrl();
@@ -97,7 +100,7 @@ export default function EditProfile() {
       }
 
       const { storageId } = await result.json();
-      return storageId;
+      return { success: true, storageId };
     } catch (error) {
       console.error(`${type} upload failed:`, error);
       throw error;
@@ -198,14 +201,32 @@ export default function EditProfile() {
 
       if (avatarFile) {
         setIsUploadingAvatar(true);
-        avatarStorageId = await handleFileUpload(avatarFile, 'avatar');
-        setIsUploadingAvatar(false);
+        try {
+          const { storageId } = await handleFileUpload(avatarFile, 'avatar');
+          avatarStorageId = storageId;
+        } catch (error) {
+          console.error('Failed to upload avatar file:', error);
+          const errorMessage = 'Failed to upload avatar. Please try again.';
+          setMessage({ type: "error", text: errorMessage });
+          throw new Error(errorMessage);
+        } finally {
+          setIsUploadingAvatar(false);
+        }
       }
 
       if (bannerFile) {
         setIsUploadingBanner(true);
-        bannerStorageId = await handleFileUpload(bannerFile, 'banner');
-        setIsUploadingBanner(false);
+        try {
+          const { storageId } = await handleFileUpload(bannerFile, 'banner');
+          bannerStorageId = storageId;
+        } catch (error) {
+          console.error('Failed to upload banner file:', error);
+          const errorMessage = 'Failed to upload banner. Please try again.';
+          setMessage({ type: "error", text: errorMessage });
+          throw new Error(errorMessage);
+        } finally {
+          setIsUploadingBanner(false);
+        }
       }
 
       const result = await updateProfile({
