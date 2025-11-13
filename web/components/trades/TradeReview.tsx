@@ -9,6 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
 
 interface PendingTrade {
   _id: Id<"pending_trades">;
@@ -31,6 +32,15 @@ export default function TradeReview() {
   const [selectedImportId, setSelectedImportId] = useState<Id<"imports"> | null>(null);
   const [showRawText, setShowRawText] = useState<Record<string, boolean>>({});
   const [editingTrade, setEditingTrade] = useState<PendingTrade | null>(null);
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
+  const [rejectingTrade, setRejectingTrade] = useState<PendingTrade | null>(null);
+  const [rejectReason, setRejectReason] = useState("");
+  const [rejectError, setRejectError] = useState<string | null>(null);
+  const [isRejecting, setIsRejecting] = useState(false);
+  const [confirmAutoApproveOpen, setConfirmAutoApproveOpen] = useState(false);
+  const [isAutoApproving, setIsAutoApproving] = useState(false);
+  const [feedback, setFeedback] = useState<{ type: "success" | "error"; message: string } | null>(null);
 
   // Fetch pending trades
   const pendingTrades = useQuery(
@@ -49,39 +59,68 @@ export default function TradeReview() {
   const editTrade = useMutation(api.pendingTrades.editPendingTrade);
 
   const handleApprove = async (id: Id<"pending_trades">) => {
+    setFeedback(null);
     try {
       await approveTrade({ id });
     } catch (e: any) {
-      alert(`Error approving trade: ${e.message}`);
+      setFeedback({ type: "error", message: `Error approving trade: ${e.message}` });
     }
   };
 
-  const handleReject = async (id: Id<"pending_trades">) => {
-    const reason = prompt("Reason for rejection (optional):");
+  const handleReject = (trade: PendingTrade) => {
+    setRejectingTrade(trade);
+    setRejectReason("");
+    setRejectError(null);
+  };
+
+  const submitReject = async () => {
+    if (!rejectingTrade) return;
+
+    setRejectError(null);
+    setFeedback(null);
+    setIsRejecting(true);
     try {
-      await rejectTrade({ id, reason: reason || undefined });
+      await rejectTrade({ id: rejectingTrade._id, reason: rejectReason.trim() || undefined });
+      setRejectingTrade(null);
+      setRejectReason("");
+      setFeedback({ type: "success", message: "Trade rejected." });
     } catch (e: any) {
-      alert(`Error rejecting trade: ${e.message}`);
+      setRejectError(`Error rejecting trade: ${e.message}`);
+    } finally {
+      setIsRejecting(false);
     }
   };
 
-  const handleAutoApprove = async () => {
-    if (!confirm("Auto-approve all high-confidence trades?")) return;
+  const handleAutoApprove = () => {
+    setFeedback(null);
+    setConfirmAutoApproveOpen(true);
+  };
+
+  const submitAutoApprove = async () => {
+    setFeedback(null);
+    setIsAutoApproving(true);
     try {
       const result = await autoApproveHigh({});
-      alert(`Approved ${result.approved} trades, ${result.failed} failed`);
+      setFeedback({ type: "success", message: `Approved ${result.approved} trades, ${result.failed} failed.` });
+      setConfirmAutoApproveOpen(false);
     } catch (e: any) {
-      alert(`Error: ${e.message}`);
+      setFeedback({ type: "error", message: `Error auto-approving trades: ${e.message}` });
+    } finally {
+      setIsAutoApproving(false);
     }
   };
 
   const handleEdit = (trade: PendingTrade) => {
     setEditingTrade(trade);
+    setEditError(null);
   };
 
-  const handleSaveEdit = async (updates: Partial<PendingTrade>) => {
+  const handleSaveEdit = async (updates: PendingTrade) => {
     if (!editingTrade) return;
 
+    setEditError(null);
+    setFeedback(null);
+    setIsSavingEdit(true);
     try {
       await editTrade({
         id: editingTrade._id,
@@ -98,9 +137,11 @@ export default function TradeReview() {
         },
       });
       setEditingTrade(null);
+      setFeedback({ type: "success", message: "Trade updated." });
     } catch (e: any) {
-      alert(`Error saving trade: ${e.message}`);
+      setEditError(`Error saving trade: ${e.message}`);
     }
+    setIsSavingEdit(false);
   };
 
   const formatDate = (ms: number) => {
@@ -167,6 +208,18 @@ export default function TradeReview() {
           </span>
         </div>
       </div>
+
+      {feedback && (
+        <div
+          className={`text-sm rounded border px-3 py-2 ${
+            feedback.type === "error"
+              ? "border-red-300 bg-red-50 text-red-700"
+              : "border-green-300 bg-green-50 text-green-700"
+          }`}
+        >
+          {feedback.message}
+        </div>
+      )}
 
       {/* Auto-approve button */}
       {high.length > 0 && (
@@ -283,9 +336,41 @@ export default function TradeReview() {
         <EditTradeDialog
           trade={editingTrade}
           onSave={handleSaveEdit}
-          onCancel={() => setEditingTrade(null)}
+          onCancel={() => {
+            if (isSavingEdit) return;
+            setEditingTrade(null);
+            setEditError(null);
+          }}
+          error={editError}
+          isSubmitting={isSavingEdit}
         />
       )}
+
+      <RejectTradeDialog
+        trade={rejectingTrade}
+        reason={rejectReason}
+        onReasonChange={setRejectReason}
+        onConfirm={submitReject}
+        onCancel={() => {
+          if (isRejecting) return;
+          setRejectingTrade(null);
+          setRejectReason("");
+          setRejectError(null);
+        }}
+        error={rejectError}
+        isSubmitting={isRejecting}
+      />
+
+      <ConfirmAutoApproveDialog
+        open={confirmAutoApproveOpen}
+        pendingCount={high.length}
+        onConfirm={submitAutoApprove}
+        onCancel={() => {
+          if (isAutoApproving) return;
+          setConfirmAutoApproveOpen(false);
+        }}
+        isSubmitting={isAutoApproving}
+      />
     </div>
   );
 }
@@ -305,7 +390,7 @@ function TradeCard({
 }: {
   trade: PendingTrade;
   onApprove: (id: Id<"pending_trades">) => void;
-  onReject: (id: Id<"pending_trades">) => void;
+  onReject: (trade: PendingTrade) => void;
   onEdit: (trade: PendingTrade) => void;
   showRawText: boolean;
   onToggleRawText: () => void;
@@ -389,7 +474,7 @@ function TradeCard({
           ✎ Edit
         </Button>
         <Button
-          onClick={() => onReject(trade._id)}
+          onClick={() => onReject(trade)}
           variant="outline"
           className="text-xs"
           size="sm"
@@ -406,16 +491,20 @@ function EditTradeDialog({
   trade,
   onSave,
   onCancel,
+  error,
+  isSubmitting,
 }: {
   trade: PendingTrade;
-  onSave: (updates: Partial<PendingTrade>) => void;
+  onSave: (updates: PendingTrade) => Promise<void>;
   onCancel: () => void;
+  error: string | null;
+  isSubmitting: boolean;
 }) {
   const [formData, setFormData] = useState<PendingTrade>(trade);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    onSave(formData);
+    await onSave(formData);
   };
 
   const formatDateForInput = (ms: number) => {
@@ -437,7 +526,7 @@ function EditTradeDialog({
   };
 
   return (
-    <Dialog open={true} onOpenChange={(open) => !open && onCancel()}>
+    <Dialog open={true} onOpenChange={(open) => !open && !isSubmitting && onCancel()}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Edit Trade</DialogTitle>
@@ -564,12 +653,141 @@ function EditTradeDialog({
             </div>
           </div>
 
+          {error && (
+            <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded px-3 py-2">
+              {error}
+            </div>
+          )}
+
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={onCancel}>
+            <Button type="button" variant="outline" onClick={onCancel} disabled={isSubmitting}>
               Cancel
             </Button>
-            <Button type="submit" className="bg-blue-600 hover:bg-blue-700">
-              Save Changes
+            <Button type="submit" className="bg-blue-600 hover:bg-blue-700" disabled={isSubmitting}>
+              {isSubmitting ? "Saving..." : "Save Changes"}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function RejectTradeDialog({
+  trade,
+  reason,
+  onReasonChange,
+  onConfirm,
+  onCancel,
+  error,
+  isSubmitting,
+}: {
+  trade: PendingTrade | null;
+  reason: string;
+  onReasonChange: (value: string) => void;
+  onConfirm: () => Promise<void>;
+  onCancel: () => void;
+  error: string | null;
+  isSubmitting: boolean;
+}) {
+  if (!trade) return null;
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    await onConfirm();
+  };
+
+  return (
+    <Dialog open={true} onOpenChange={(open) => !open && !isSubmitting && onCancel()}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>Reject Trade</DialogTitle>
+          <DialogDescription>
+            Optionally provide a reason for rejecting this trade so it can be reviewed later.
+          </DialogDescription>
+        </DialogHeader>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="rounded border border-foreground/20 bg-foreground/5 px-3 py-2 text-sm">
+            <div className="font-medium">
+              {trade.action} {trade.quantity_contracts} {trade.underlying} {new Date(trade.expiration).toLocaleDateString()} {trade.optionType}s @ $
+              {trade.premium_per_contract.toFixed(2)}
+            </div>
+            <div className="text-xs text-foreground/60">Trade time: {new Date(trade.tradeTime).toLocaleString()}</div>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="reject-reason">Rejection Reason (optional)</Label>
+            <Textarea
+              id="reject-reason"
+              value={reason}
+              onChange={(event) => onReasonChange(event.target.value)}
+              placeholder="Add context for why this trade was rejected"
+              rows={4}
+            />
+          </div>
+
+          {error && (
+            <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded px-3 py-2">
+              {error}
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={onCancel} disabled={isSubmitting}>
+              Cancel
+            </Button>
+            <Button type="submit" className="bg-red-600 hover:bg-red-700" disabled={isSubmitting}>
+              {isSubmitting ? "Rejecting..." : "Reject Trade"}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function ConfirmAutoApproveDialog({
+  open,
+  pendingCount,
+  onConfirm,
+  onCancel,
+  isSubmitting,
+}: {
+  open: boolean;
+  pendingCount: number;
+  onConfirm: () => Promise<void>;
+  onCancel: () => void;
+  isSubmitting: boolean;
+}) {
+  if (!open) return null;
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    await onConfirm();
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={(nextOpen) => !nextOpen && !isSubmitting && onCancel()}>
+      <DialogContent className="max-w-sm">
+        <DialogHeader>
+          <DialogTitle>Auto-Approve High Confidence Trades</DialogTitle>
+          <DialogDescription>
+            {pendingCount === 1
+              ? "This will approve the single high-confidence trade."
+              : `This will approve ${pendingCount} high-confidence trades.`}
+          </DialogDescription>
+        </DialogHeader>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <p className="text-sm text-foreground/70">
+            Approved trades are immediately inserted into your book. You can review the audit trail at any time from the history
+            tab.
+          </p>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={onCancel} disabled={isSubmitting}>
+              Cancel
+            </Button>
+            <Button type="submit" className="bg-green-600 hover:bg-green-700" disabled={isSubmitting}>
+              {isSubmitting ? "Auto-approving..." : `Approve ${pendingCount}`}
             </Button>
           </DialogFooter>
         </form>
