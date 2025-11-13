@@ -43,9 +43,16 @@ export default function EditProfile() {
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
   const [isUploadingBanner, setIsUploadingBanner] = useState(false);
 
-  // Redirect if not authenticated
-  if (!isAuthenticated && !isLoading) {
-    router.push("/");
+  const shouldRedirect = !isLoading && !isAuthenticated;
+
+  useEffect(() => {
+    if (shouldRedirect) {
+      void router.push("/signin");
+    }
+  }, [router, shouldRedirect]);
+
+  if (shouldRedirect) {
+    return null;
   }
 
   // Initialize form data when profile loads
