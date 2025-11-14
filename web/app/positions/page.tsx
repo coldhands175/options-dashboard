@@ -18,8 +18,10 @@ import {
 } from "@/components/ui/table";
 import Link from "next/link";
 import GanttPositions, { type MonthlyPremium } from "@/components/positions/GanttPositions";
+import OptionsMatrixBoard from "@/components/positions/OptionsMatrixBoard";
 import SymbolConfirmation from "@/components/stocks/SymbolConfirmation";
 import { AlertCircle } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 type PositionRow = {
   underlying: string;
@@ -215,124 +217,139 @@ export default function PositionsPage() {
                 No active option positions
               </div>
             ) : (
-              <>
-                {/* Timeline */}
-                <div>
-                  <div className="mb-2 text-sm text-muted-foreground">
-                    Timeline
-                    <span className="ml-2 text-xs">(Monthly net premiums shown at expiration dates)</span>
+              <Tabs defaultValue="table" className="w-full">
+                <TabsList className="grid w-full max-w-md grid-cols-3">
+                  <TabsTrigger value="table">Table</TabsTrigger>
+                  <TabsTrigger value="timeline">Timeline</TabsTrigger>
+                  <TabsTrigger value="matrix">Matrix</TabsTrigger>
+                </TabsList>
+
+                {/* Table View */}
+                <TabsContent value="table" className="space-y-4">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>
+                          <button className="hover:underline" onClick={() => handleSort("underlying")}>
+                            Symbol {sortKey === "underlying" ? (sortDir === "asc" ? "▲" : "▼") : ""}
+                          </button>
+                        </TableHead>
+                        <TableHead>
+                          <button className="hover:underline" onClick={() => handleSort("optionType")}>
+                            Type {sortKey === "optionType" ? (sortDir === "asc" ? "▲" : "▼") : ""}
+                          </button>
+                        </TableHead>
+                        <TableHead className="text-right">
+                          <button className="hover:underline" onClick={() => handleSort("strike")}>
+                            Strike {sortKey === "strike" ? (sortDir === "asc" ? "▲" : "▼") : ""}
+                          </button>
+                        </TableHead>
+                        <TableHead>
+                          <button className="hover:underline" onClick={() => handleSort("expiration")}>
+                            Expiration {sortKey === "expiration" ? (sortDir === "asc" ? "▲" : "▼") : ""}
+                          </button>
+                        </TableHead>
+                        <TableHead>
+                          <button className="hover:underline" onClick={() => handleSort("side")}>
+                            Side {sortKey === "side" ? (sortDir === "asc" ? "▲" : "▼") : ""}
+                          </button>
+                        </TableHead>
+                        <TableHead className="text-right">
+                          <button className="hover:underline" onClick={() => handleSort("netContracts")}>
+                            Contracts {sortKey === "netContracts" ? (sortDir === "asc" ? "▲" : "▼") : ""}
+                          </button>
+                        </TableHead>
+                        <TableHead className="text-right">Stock Price</TableHead>
+                        <TableHead className="text-right">Market Value</TableHead>
+                        <TableHead className="text-right">Cost Basis</TableHead>
+                        <TableHead className="text-right">P&L</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {sortedPositions.map((pos, idx) => {
+                        const pnlPositive = pos.unrealizedPnL !== null && pos.unrealizedPnL > 0;
+                        const pnlNegative = pos.unrealizedPnL !== null && pos.unrealizedPnL < 0;
+                        const pnlColor = pnlPositive ? "text-green-600" : pnlNegative ? "text-red-600" : "";
+
+                        return (
+                          <TableRow key={idx}>
+                            <TableCell className="font-medium">
+                              <Link
+                                href={`/positions/${pos.underlying}/${pos.optionType}/${pos.strike}/${pos.expiration}`}
+                                className="hover:underline"
+                              >
+                                {pos.underlying}
+                              </Link>
+                            </TableCell>
+                            <TableCell>
+                              <Badge variant={pos.optionType === "CALL" ? "default" : "secondary"}>
+                                {pos.optionType}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="text-right">${pos.strike}</TableCell>
+                            <TableCell>{new Date(pos.expiration).toLocaleDateString()}</TableCell>
+                            <TableCell>
+                              <Badge variant={pos.side === "Long" ? "outline" : "destructive"}>
+                                {pos.side}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="text-right">{pos.netContracts}</TableCell>
+                            <TableCell className="text-right">
+                              {pos.currentStockPrice !== null
+                                ? `$${pos.currentStockPrice.toFixed(2)}`
+                                : "—"}
+                            </TableCell>
+                            <TableCell className="text-right">
+                              {pos.marketValue !== null
+                                ? `$${pos.marketValue.toFixed(2)}`
+                                : "—"}
+                            </TableCell>
+                            <TableCell className="text-right">
+                              ${Math.abs(pos.costBasis).toFixed(2)}
+                            </TableCell>
+                            <TableCell className={`text-right font-medium ${pnlColor}`}>
+                              {pos.unrealizedPnL !== null
+                                ? `${pnlPositive ? "+" : ""}$${pos.unrealizedPnL.toFixed(2)}`
+                                : "—"}
+                              {pos.unrealizedPnLPercent !== null && (
+                                <span className="text-xs ml-1">
+                                  ({pnlPositive ? "+" : ""}{pos.unrealizedPnLPercent.toFixed(1)}%)
+                                </span>
+                              )}
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                </TabsContent>
+
+                {/* Timeline View */}
+                <TabsContent value="timeline" className="space-y-4">
+                  <div>
+                    <div className="mb-2 text-sm text-muted-foreground">
+                      Timeline
+                      <span className="ml-2 text-xs">(Monthly net premiums shown at expiration dates)</span>
+                    </div>
+                    <GanttPositions
+                      items={(sortedPositions as PositionRow[]).map((p) => ({
+                        id: `${p.underlying}-${p.optionType}-${p.strike}-${p.expiration}`,
+                        label: `${p.underlying} ${p.optionType} ${p.strike} · exp ${new Date(p.expiration).toLocaleDateString()}`,
+                        start: p.openedAt,
+                        end: p.expiration,
+                        color: p.side === "Long" ? "#10b981" : "#ef4444",
+                        rowClassName: "hover:bg-accent/40",
+                      }))}
+                      monthlyPremiums={monthlyPremiums}
+                    />
                   </div>
-                  <GanttPositions
-                    items={(sortedPositions as PositionRow[]).map((p) => ({
-                      id: `${p.underlying}-${p.optionType}-${p.strike}-${p.expiration}`,
-                      label: `${p.underlying} ${p.optionType} ${p.strike} · exp ${new Date(p.expiration).toLocaleDateString()}`,
-                      start: p.openedAt,
-                      end: p.expiration,
-                      color: p.side === "Long" ? "#10b981" : "#ef4444",
-                      rowClassName: "hover:bg-accent/40",
-                    }))}
-                    monthlyPremiums={monthlyPremiums}
-                  />
-                </div>
+                </TabsContent>
 
-                {/* Table */}
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>
-                        <button className="hover:underline" onClick={() => handleSort("underlying")}>
-                          Symbol {sortKey === "underlying" ? (sortDir === "asc" ? "▲" : "▼") : ""}
-                        </button>
-                      </TableHead>
-                      <TableHead>
-                        <button className="hover:underline" onClick={() => handleSort("optionType")}>
-                          Type {sortKey === "optionType" ? (sortDir === "asc" ? "▲" : "▼") : ""}
-                        </button>
-                      </TableHead>
-                      <TableHead className="text-right">
-                        <button className="hover:underline" onClick={() => handleSort("strike")}>
-                          Strike {sortKey === "strike" ? (sortDir === "asc" ? "▲" : "▼") : ""}
-                        </button>
-                      </TableHead>
-                      <TableHead>
-                        <button className="hover:underline" onClick={() => handleSort("expiration")}>
-                          Expiration {sortKey === "expiration" ? (sortDir === "asc" ? "▲" : "▼") : ""}
-                        </button>
-                      </TableHead>
-                      <TableHead>
-                        <button className="hover:underline" onClick={() => handleSort("side")}>
-                          Side {sortKey === "side" ? (sortDir === "asc" ? "▲" : "▼") : ""}
-                        </button>
-                      </TableHead>
-                      <TableHead className="text-right">
-                        <button className="hover:underline" onClick={() => handleSort("netContracts")}>
-                          Contracts {sortKey === "netContracts" ? (sortDir === "asc" ? "▲" : "▼") : ""}
-                        </button>
-                      </TableHead>
-                      <TableHead className="text-right">Stock Price</TableHead>
-                      <TableHead className="text-right">Market Value</TableHead>
-                      <TableHead className="text-right">Cost Basis</TableHead>
-                      <TableHead className="text-right">P&L</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {sortedPositions.map((pos, idx) => {
-                      const pnlPositive = pos.unrealizedPnL !== null && pos.unrealizedPnL > 0;
-                      const pnlNegative = pos.unrealizedPnL !== null && pos.unrealizedPnL < 0;
-                      const pnlColor = pnlPositive ? "text-green-600" : pnlNegative ? "text-red-600" : "";
-
-                      return (
-                        <TableRow key={idx}>
-                          <TableCell className="font-medium">
-                            <Link
-                              href={`/positions/${pos.underlying}/${pos.optionType}/${pos.strike}/${pos.expiration}`}
-                              className="hover:underline"
-                            >
-                              {pos.underlying}
-                            </Link>
-                          </TableCell>
-                          <TableCell>
-                            <Badge variant={pos.optionType === "CALL" ? "default" : "secondary"}>
-                              {pos.optionType}
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="text-right">${pos.strike}</TableCell>
-                          <TableCell>{new Date(pos.expiration).toLocaleDateString()}</TableCell>
-                          <TableCell>
-                            <Badge variant={pos.side === "Long" ? "outline" : "destructive"}>
-                              {pos.side}
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="text-right">{pos.netContracts}</TableCell>
-                          <TableCell className="text-right">
-                            {pos.currentStockPrice !== null
-                              ? `$${pos.currentStockPrice.toFixed(2)}`
-                              : "—"}
-                          </TableCell>
-                          <TableCell className="text-right">
-                            {pos.marketValue !== null
-                              ? `$${pos.marketValue.toFixed(2)}`
-                              : "—"}
-                          </TableCell>
-                          <TableCell className="text-right">
-                            ${Math.abs(pos.costBasis).toFixed(2)}
-                          </TableCell>
-                          <TableCell className={`text-right font-medium ${pnlColor}`}>
-                            {pos.unrealizedPnL !== null
-                              ? `${pnlPositive ? "+" : ""}$${pos.unrealizedPnL.toFixed(2)}`
-                              : "—"}
-                            {pos.unrealizedPnLPercent !== null && (
-                              <span className="text-xs ml-1">
-                                ({pnlPositive ? "+" : ""}{pos.unrealizedPnLPercent.toFixed(1)}%)
-                              </span>
-                            )}
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })}
-                  </TableBody>
-                </Table>
-              </>
+                {/* Matrix View */}
+                <TabsContent value="matrix" className="space-y-4">
+                  <OptionsMatrixBoard positions={sortedPositions as PositionRow[]} />
+                </TabsContent>
+              </Tabs>
             )}
           </CardContent>
         </Card>
